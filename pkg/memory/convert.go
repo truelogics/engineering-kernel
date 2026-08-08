@@ -29,10 +29,10 @@ func toIndexResult(r kernel.IndexResult) IndexResult {
 // ContextPackage's fixed fields (RFC-0004). Labels not recognized below
 // (Architecture, Documentation, RFCs, Roadmap, ...) fold into
 // RelevantFiles — ContextPackage deliberately doesn't distinguish them.
-func toContextPackage(bundle kernel.RetrievalBundle) ContextPackage {
+func toContextPackage(bundle kernel.RetrievalBundle, repoNames map[string]string) ContextPackage {
 	pkg := ContextPackage{Task: bundle.Task}
 	for _, group := range bundle.Groups {
-		files := toFileContexts(group.Results)
+		files := toFileContexts(group.Results, repoNames)
 		switch group.Label {
 		case "Related ADRs":
 			pkg.ADRs = files
@@ -49,10 +49,15 @@ func toContextPackage(bundle kernel.RetrievalBundle) ContextPackage {
 	return pkg
 }
 
-func toFileContexts(results []kernel.SearchResult) []FileContext {
+func toFileContexts(results []kernel.SearchResult, repoNames map[string]string) []FileContext {
 	out := make([]FileContext, len(results))
 	for i, r := range results {
-		out[i] = FileContext{Path: r.Document.Path, Score: r.Score, Snippet: r.Snippet}
+		out[i] = FileContext{
+			Path:       r.Document.Path,
+			Repository: repoNames[r.Document.RepositoryID],
+			Score:      r.Score,
+			Snippet:    r.Snippet,
+		}
 	}
 	return out
 }

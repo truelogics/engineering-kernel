@@ -126,7 +126,14 @@ func Init(ctx context.Context, dir string, out io.Writer) error {
 }
 
 // Index implements `eng index [path]`: runs the full Collector -> Parser
-// -> Normalizer -> Chunker -> Storage pipeline for dir.
+// -> Normalizer -> Chunker -> Storage pipeline for every repository
+// attached to the workspace at dir.
+//
+// This indexes the whole workspace, not just dir. Indexing only dir made
+// `eng workspace attach` pointless the moment anyone re-indexed: a
+// second attached repository would keep whatever documents it had from
+// attach time and silently never be refreshed again. The workspace is
+// the indexing boundary, so it is also the re-indexing boundary.
 func Index(ctx context.Context, dir string, out io.Writer) error {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -139,22 +146,45 @@ func Index(ctx context.Context, dir string, out io.Writer) error {
 	}
 	defer store.Close()
 
+	repos, err := workspaceRepositories(ctx, store, absDir)
+	if err != nil {
+		return fmt.Errorf("index: %w", err)
+	}
+
+	idx := newIndexer(store)
+	for _, repo := range repos {
+		result, err := idx.Index(ctx, repo)
+		if err != nil {
+			return fmt.Errorf("index %s: %w", repo.Name, err)
+		}
+		fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
+			repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
+	}
+	return nil
+}
+
+// workspaceRepositories returns every repository attached to the
+// workspace, registering absDir itself when the workspace is empty —
+// which keeps `eng init && eng index .` working unchanged for the
+// single-repository case that was the only case before workspaces had a
+// CLI.
+func workspaceRepositories(ctx context.Context, store kernel.Storage, absDir string) ([]domain.Repository, error) {
+	repos, err := store.ListRepositories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(repos) > 0 {
+		return repos, nil
+	}
+
 	repo, _, err := findOrCreateRepository(ctx, store, absDir)
 	if err != nil {
-		return fmt.Errorf("index: %w", err)
+		return nil, err
 	}
 	if err := store.PutRepository(ctx, repo); err != nil {
-		return fmt.Errorf("index: %w", err)
+		return nil, err
 	}
-
-	result, err := newIndexer(store).Index(ctx, repo)
-	if err != nil {
-		return fmt.Errorf("index: %w", err)
-	}
-
-	fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
-		repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
-	return nil
+	return []domain.Repository{repo}, nil
 }
 
 // Sync implements `eng sync [path]`: incremental re-index using git as
@@ -305,5 +335,154 @@ func Status(ctx context.Context, dir string, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "%-20s %6d  %-19s  %s\n", repo.Name, docs, lastIndexed, status)
 	}
+	return nil
+}
+
+// --- Workspace commands ---------------------------------------------
+//
+// A Workspace is the indexing boundary: one `.eng/memory.db` holding one
+// or more registered repositories, searched together. Until Sprint 7
+// this was reachable only from Go (`pkg/memory.AddRepository`), never
+// from the CLI, so in practice every workspace held exactly one
+// repository — the directory it was created in. That is why a review of
+// an application repository could never retrieve the engineering
+// knowledge base's rules: not because the kernel couldn't hold both, but
+// because nothing let anyone say so.
+
+// WorkspaceCreate implements `eng workspace create [path]` — the
+// workspace-vocabulary spelling of `eng init`. Creating a workspace and
+// registering its own directory is the same operation; this name says
+// what is being made rather than what is being bootstrapped.
+func WorkspaceCreate(ctx context.Context, dir string, out io.Writer) error {
+	return Init(ctx, dir, out)
+}
+
+// WorkspaceList implements `eng workspace list`: every repository
+// registered in the workspace at dir, with its indexed document count.
+func WorkspaceList(ctx context.Context, dir string, out io.Writer) error {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("workspace list: %w", err)
+	}
+	store, err := openStore(absDir, false)
+	if err != nil {
+		return fmt.Errorf("workspace list: %w", err)
+	}
+	defer store.Close()
+
+	repos, err := store.ListRepositories(ctx)
+	if err != nil {
+		return fmt.Errorf("workspace list: %w", err)
+	}
+	if len(repos) == 0 {
+		fmt.Fprintf(out, "No repositories registered in %s\n", dbPath(absDir))
+		return nil
+	}
+
+	fmt.Fprintf(out, "Workspace: %s\n\n", dbPath(absDir))
+	for _, repo := range repos {
+		docs, err := store.ListDocuments(ctx, repo.ID)
+		if err != nil {
+			return fmt.Errorf("workspace list: %w", err)
+		}
+		fmt.Fprintf(out, "  %-20s %4d documents  %s\n", repo.Name, len(docs), repo.LocalPath)
+	}
+	return nil
+}
+
+// WorkspaceAttach implements `eng workspace attach <path>`: registers
+// repoPath into the workspace at dir and indexes it immediately. Attach
+// indexes rather than only registering because a registered-but-unindexed
+// repository is indistinguishable, at retrieval time, from one that
+// isn't there — it contributes nothing and reports no error.
+func WorkspaceAttach(ctx context.Context, dir, repoPath string, out io.Writer) error {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+	absRepo, err := filepath.Abs(repoPath)
+	if err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+	if info, err := os.Stat(absRepo); err != nil || !info.IsDir() {
+		return fmt.Errorf("workspace attach: %s is not a directory", absRepo)
+	}
+
+	store, err := openStore(absDir, false)
+	if err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+	defer store.Close()
+
+	repo, existed, err := findOrCreateRepository(ctx, store, absRepo)
+	if err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+	if remote := gitRemote(absRepo); remote != "" {
+		repo = repo.WithRemote(remote)
+	}
+	if err := store.PutRepository(ctx, repo); err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+
+	result, err := newIndexer(store).Index(ctx, repo)
+	if err != nil {
+		return fmt.Errorf("workspace attach: %w", err)
+	}
+
+	verb := "Attached"
+	if existed {
+		verb = "Re-indexed already-attached"
+	}
+	fmt.Fprintf(out, "%s %s (%s)\n", verb, repo.Name, absRepo)
+	fmt.Fprintf(out, "  %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
+		result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
+	return nil
+}
+
+// WorkspaceDetach implements `eng workspace detach <path>`: removes
+// repoPath's documents and its registration from the workspace at dir.
+// Documents are deleted before the registration, so an interrupted
+// detach leaves a registered repository with missing documents — which
+// `eng index` repairs — rather than orphaned documents no repository
+// claims, which nothing would.
+func WorkspaceDetach(ctx context.Context, dir, repoPath string, out io.Writer) error {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+	absRepo, err := filepath.Abs(repoPath)
+	if err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+
+	store, err := openStore(absDir, false)
+	if err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+	defer store.Close()
+
+	repo, ok, err := store.FindRepositoryByPath(ctx, absRepo)
+	if err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("workspace detach: %s is not attached to this workspace", absRepo)
+	}
+
+	docs, err := store.ListDocuments(ctx, repo.ID)
+	if err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+	for _, doc := range docs {
+		if err := store.DeleteDocument(ctx, doc.ID); err != nil {
+			return fmt.Errorf("workspace detach: %w", err)
+		}
+	}
+	if err := store.DeleteRepository(ctx, repo.ID); err != nil {
+		return fmt.Errorf("workspace detach: %w", err)
+	}
+
+	fmt.Fprintf(out, "Detached %s (%s): %d documents removed\n", repo.Name, absRepo, len(docs))
 	return nil
 }

@@ -255,3 +255,63 @@ func TestContextWithoutInitFails(t *testing.T) {
 		t.Fatal("Context: expected error when no workspace has been initialized")
 	}
 }
+
+// TestWorkspaceAttachMakesAnotherRepositoryRetrievable is the Sprint 7
+// end-to-end case: a workspace created in one directory, with a second
+// repository attached, must retrieve the second repository's rules for a
+// task about the first. Before `eng workspace attach` existed this was
+// reachable only from Go, so in practice every workspace held exactly
+// one repository and a review could never see the organization's rules.
+func TestWorkspaceAttachMakesAnotherRepositoryRetrievable(t *testing.T) {
+	ctx := context.Background()
+
+	app := t.TempDir()
+	writeFile(t, app, "README.md", "---\ndoc: README\n---\n\n# App\n\nThe billing service writes invoices.\n")
+
+	knowledge := t.TempDir()
+	writeFile(t, knowledge, "rules/no-raw-sql.md",
+		"---\ndoc: RULE\nid: no-raw-sql\n---\n\n# Rule: invoices are written through the store\n\nBilling code never writes raw SQL for invoices.\n")
+
+	var out strings.Builder
+	if err := WorkspaceCreate(ctx, app, &out); err != nil {
+		t.Fatalf("WorkspaceCreate: %v", err)
+	}
+	if err := WorkspaceAttach(ctx, app, knowledge, &out); err != nil {
+		t.Fatalf("WorkspaceAttach: %v", err)
+	}
+	if err := Index(ctx, app, &out); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	var ctxOut strings.Builder
+	if err := Context(ctx, app, "invoices billing raw SQL store", &ctxOut); err != nil {
+		t.Fatalf("Context: %v", err)
+	}
+	if !strings.Contains(ctxOut.String(), "rules/no-raw-sql.md") {
+		t.Fatalf("context did not retrieve the attached repository's rule:\n%s", ctxOut.String())
+	}
+
+	// Detach removes it again, documents and all.
+	var detachOut strings.Builder
+	if err := WorkspaceDetach(ctx, app, knowledge, &detachOut); err != nil {
+		t.Fatalf("WorkspaceDetach: %v", err)
+	}
+	var afterOut strings.Builder
+	if err := Context(ctx, app, "invoices billing raw SQL store", &afterOut); err != nil {
+		t.Fatalf("Context after detach: %v", err)
+	}
+	if strings.Contains(afterOut.String(), "no-raw-sql") {
+		t.Errorf("detached repository's documents still retrievable:\n%s", afterOut.String())
+	}
+}
+
+func TestWorkspaceDetachUnknownRepositoryFails(t *testing.T) {
+	dir := t.TempDir()
+	var out strings.Builder
+	if err := WorkspaceCreate(context.Background(), dir, &out); err != nil {
+		t.Fatalf("WorkspaceCreate: %v", err)
+	}
+	if err := WorkspaceDetach(context.Background(), dir, t.TempDir(), &out); err == nil {
+		t.Fatal("WorkspaceDetach: want an error for a repository that was never attached")
+	}
+}

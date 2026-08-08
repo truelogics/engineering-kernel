@@ -55,7 +55,12 @@ func main() {
 			os.Exit(1)
 		}
 		err = cli.Context(ctx, ".", *task, os.Stdout)
-	case "add", "doctor":
+	case "workspace":
+		err = runWorkspace(ctx, args)
+	case "add":
+		fmt.Fprintln(os.Stderr, "eng add: replaced by `eng workspace attach <path>`")
+		os.Exit(1)
+	case "doctor":
 		fmt.Fprintf(os.Stderr, "eng %s: not yet implemented (see docs/cli/CLI.md)\n", cmd)
 		os.Exit(1)
 	default:
@@ -92,6 +97,51 @@ Commands:
   ask <question>  gather context for a question (Retriever + Context Builder)
   context --task "<description>"   same as ask, task-shaped instead of a question
 
+Workspace (a workspace is one index over one or more repositories):
+  workspace create [path]     create a workspace and register its own directory
+  workspace list              list every attached repository
+  workspace attach <path>     attach a repository and index it
+  workspace detach <path>     remove a repository and its documents
+
 Planned, not yet implemented (see docs/cli/CLI.md):
-  add, doctor`)
+  doctor`)
+}
+
+func runWorkspace(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		printWorkspaceUsage()
+		os.Exit(1)
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "create":
+		return cli.WorkspaceCreate(ctx, firstArgOr(rest, "."), os.Stdout)
+	case "list":
+		return cli.WorkspaceList(ctx, firstArgOr(rest, "."), os.Stdout)
+	case "attach":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: eng workspace attach <path>")
+			os.Exit(1)
+		}
+		return cli.WorkspaceAttach(ctx, ".", rest[0], os.Stdout)
+	case "detach":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: eng workspace detach <path>")
+			os.Exit(1)
+		}
+		return cli.WorkspaceDetach(ctx, ".", rest[0], os.Stdout)
+	default:
+		printWorkspaceUsage()
+		os.Exit(1)
+		return nil
+	}
+}
+
+func printWorkspaceUsage() {
+	fmt.Fprintln(os.Stderr, `usage: eng workspace <command>
+
+  create [path]   create a workspace and register its own directory
+  list            list every attached repository
+  attach <path>   attach a repository to this workspace and index it
+  detach <path>   remove a repository and its documents`)
 }

@@ -55,6 +55,9 @@ type Storage interface {
 	GetRepository(ctx context.Context, id string) (domain.Repository, error)
 	FindRepositoryByPath(ctx context.Context, localPath string) (domain.Repository, bool, error)
 	ListRepositories(ctx context.Context) ([]domain.Repository, error)
+	// DeleteRepository removes a repository's registration. The caller
+	// deletes its documents first — see cli.WorkspaceDetach.
+	DeleteRepository(ctx context.Context, id string) error
 
 	// Documents
 	PutDocument(ctx context.Context, doc domain.CanonicalDocument) error

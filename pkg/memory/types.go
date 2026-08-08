@@ -34,17 +34,27 @@ type SearchOptions struct {
 
 // SearchResult is one ranked hit.
 type SearchResult struct {
-	Path    string
-	Score   float64
-	Snippet string
-	Related []string // related file paths
+	Path       string
+	Repository string // name of the Repository this hit came from
+	Score      float64
+	Snippet    string
+	Related    []string // related file paths
 }
 
 // FileContext is one entry within a ContextPackage section.
+//
+// Repository names which registered Repository the entry came from. A
+// Workspace holds many repositories and Path is only unique within one
+// of them: a workspace containing an application and the engineering
+// knowledge base returns two different `README.md` entries, and without
+// Repository a consumer cannot tell them apart, cite one unambiguously,
+// or verify that a quoted excerpt came from the document it claims.
+// Empty only for an entry whose repository is no longer registered.
 type FileContext struct {
-	Path    string
-	Score   float64
-	Snippet string
+	Path       string
+	Repository string
+	Score      float64
+	Snippet    string
 }
 
 // ContextPackage is Memory.Context's return value — the structured

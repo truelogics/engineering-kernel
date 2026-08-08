@@ -150,15 +150,41 @@ func (m *Memory) Search(ctx context.Context, query string, opts SearchOptions) (
 		return nil, fmt.Errorf("memory: %w", err)
 	}
 
+	repoNames, err := m.repositoryNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]SearchResult, len(results))
 	for i, r := range results {
 		related := make([]string, len(r.Related))
 		for j, rel := range r.Related {
 			related[j] = rel.Path
 		}
-		out[i] = SearchResult{Path: r.Document.Path, Score: r.Score, Snippet: r.Snippet, Related: related}
+		out[i] = SearchResult{
+			Path:       r.Document.Path,
+			Repository: repoNames[r.Document.RepositoryID],
+			Score:      r.Score,
+			Snippet:    r.Snippet,
+			Related:    related,
+		}
 	}
 	return out, nil
+}
+
+// repositoryNames maps repository id to name, so a result can say which
+// registered Repository it came from. A Workspace holds many
+// repositories and a document path is only unique within one of them.
+func (m *Memory) repositoryNames(ctx context.Context) (map[string]string, error) {
+	repos, err := m.store.ListRepositories(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("memory: %w", err)
+	}
+	names := make(map[string]string, len(repos))
+	for _, r := range repos {
+		names[r.ID] = r.Name
+	}
+	return names, nil
 }
 
 // Context gathers and assembles context for task — Retriever's grouped
@@ -170,7 +196,11 @@ func (m *Memory) Context(ctx context.Context, task string) (ContextPackage, erro
 	if err != nil {
 		return ContextPackage{}, fmt.Errorf("memory: %w", err)
 	}
-	return toContextPackage(bundle), nil
+	repoNames, err := m.repositoryNames(ctx)
+	if err != nil {
+		return ContextPackage{}, err
+	}
+	return toContextPackage(bundle, repoNames), nil
 }
 
 // gitRemote best-effort reads dir's `origin` remote; empty on any error.

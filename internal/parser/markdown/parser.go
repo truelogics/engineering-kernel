@@ -239,6 +239,10 @@ func inferDocType(p string, meta domain.Metadata) domain.DocType {
 		switch strings.ToUpper(doc) {
 		case "RFC":
 			return domain.DocTypeRFC
+		case "ADR":
+			return domain.DocTypeADR
+		case "RULE":
+			return domain.DocTypeRule
 		case "ARCHITECTURE", "DATABASE", "DOMAIN_MODEL", "KNOWLEDGE_MODEL", "INTERFACES", "CLI":
 			return domain.DocTypeStandard
 		case "ROADMAP", "NOW", "NEXT", "BACKLOG":
@@ -248,9 +252,13 @@ func inferDocType(p string, meta domain.Metadata) domain.DocType {
 		}
 	}
 
+	// A document's directory outranks its file name. `rules/README.md`
+	// is the rules index, not a generic readme — checking base ==
+	// "readme.md" first (as this did) classified every index page in a
+	// typed directory as DocTypeReadme, so the one document naming what
+	// lives in `rules/` was the one document retrieval could never
+	// return as a rule.
 	switch {
-	case base == "readme.md":
-		return domain.DocTypeReadme
 	case hasSegment("adr", "adrs"):
 		return domain.DocTypeADR
 	case hasSegment("rfc", "rfcs"):
@@ -259,6 +267,8 @@ func inferDocType(p string, meta domain.Metadata) domain.DocType {
 		return domain.DocTypeRule
 	case hasSegment("roadmap"):
 		return domain.DocTypeRoadmap
+	case base == "readme.md":
+		return domain.DocTypeReadme
 	default:
 		return domain.DocTypeUnknown
 	}

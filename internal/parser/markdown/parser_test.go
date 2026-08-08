@@ -161,6 +161,49 @@ func TestInferDocTypeByPathConvention(t *testing.T) {
 	}
 }
 
+// TestInferDocTypeDirectoryOutranksFileName guards a real retrieval
+// failure: `base == "readme.md"` was checked before the directory
+// segments, so `rules/README.md` — the index naming everything in
+// `rules/` — classified as a generic readme and could never be returned
+// as a rule. Six AI Review runs across three repositories retrieved zero
+// rules partly because of this.
+func TestInferDocTypeDirectoryOutranksFileName(t *testing.T) {
+	cases := map[string]domain.DocType{
+		"rules/README.md":           domain.DocTypeRule,
+		"engineering/ADR/README.md": domain.DocTypeADR,
+		"rfcs/README.md":            domain.DocTypeRFC,
+		"README.md":                 domain.DocTypeReadme,
+		"docs/README.md":            domain.DocTypeReadme,
+	}
+	for path, want := range cases {
+		if got := inferDocType(path, domain.NewMetadata()); got != want {
+			t.Errorf("inferDocType(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// TestInferDocTypeFromFrontMatter covers the `doc:` values a rule or ADR
+// declares explicitly, which outrank path convention — a rule stored
+// outside a rules/ directory is still a rule.
+func TestInferDocTypeFromFrontMatter(t *testing.T) {
+	cases := []struct {
+		doc  string
+		want domain.DocType
+	}{
+		{"RULE", domain.DocTypeRule},
+		{"ADR", domain.DocTypeADR},
+		{"RFC", domain.DocTypeRFC},
+		{"ARCHITECTURE", domain.DocTypeStandard},
+	}
+	for _, c := range cases {
+		meta := domain.NewMetadata()
+		meta.Set("doc", c.doc)
+		if got := inferDocType("some/unrelated/path.md", meta); got != c.want {
+			t.Errorf("inferDocType(doc: %s) = %q, want %q", c.doc, got, c.want)
+		}
+	}
+}
+
 func TestParseIsDeterministicForSameInput(t *testing.T) {
 	raw, _ := domain.NewRawDocument("repo-1", "README.md", []byte("# Hi\n\nHello."))
 	a, err := New().Parse(context.Background(), raw)

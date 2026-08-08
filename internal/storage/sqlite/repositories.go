@@ -84,3 +84,17 @@ func (s *Store) ListRepositories(ctx context.Context) ([]domain.Repository, erro
 	}
 	return out, rows.Err()
 }
+
+// DeleteRepository implements kernel.Storage. Removing a repository's
+// documents is the caller's job (see cli.WorkspaceDetach) — this only
+// drops the registration row, so a partially-deleted repository is
+// visibly still registered rather than silently orphaning its documents.
+func (s *Store) DeleteRepository(ctx context.Context, id string) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM index_state WHERE repository_id = ?`, id); err != nil {
+		return fmt.Errorf("sqlite: delete index state %s: %w", id, err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM repositories WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("sqlite: delete repository %s: %w", id, err)
+	}
+	return nil
+}
