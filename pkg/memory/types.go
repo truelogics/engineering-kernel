@@ -24,6 +24,20 @@ type IndexResult struct {
 	Unchanged int
 	Deleted   int
 	Errors    int
+	// Failures says which files failed and why. Errors is its length.
+	//
+	// The CLI gained this detail before the SDK did, which left the one
+	// SDK consumer still reporting "1 errors" against a 727-file
+	// repository with no file and no cause — the exact unactionable
+	// output the change was written to remove. Adding a field is not a
+	// breaking change (KERNEL_POLICY Rule #2).
+	Failures []IndexFailure
+}
+
+// IndexFailure is one file the indexer could not process, and why.
+type IndexFailure struct {
+	Path   string
+	Reason string
 }
 
 // SearchOptions filters a Search call.

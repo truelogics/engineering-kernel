@@ -18,6 +18,12 @@ const (
 	DocTypeRoadmap  DocType = "roadmap"
 	DocTypeReadme   DocType = "readme"
 	DocTypeUnknown  DocType = "unknown"
+
+	// Added by RFC-0007 for canonical types this organization's own
+	// vocabulary had no name for. Additive: no existing document
+	// changes type.
+	DocTypeGuide         DocType = "guide"
+	DocTypeSpecification DocType = "specification"
 )
 
 // RawDocument is a Collector's output and a Parser's input — bytes plus

@@ -71,6 +71,10 @@ func (c *Collector) Collect(ctx context.Context, repo domain.Repository) ([]doma
 	if walkErr != nil {
 		return nil, fmt.Errorf("filesystem: walk %s: %w", root, walkErr)
 	}
+	// SkipDirs alone cannot express what a project considers its own —
+	// see gitignore.go. Advisory: if git cannot answer, nothing is
+	// dropped.
+	paths = dropIgnored(ctx, root, paths)
 	sort.Strings(paths)
 
 	docs := make([]domain.RawDocument, 0, len(paths))

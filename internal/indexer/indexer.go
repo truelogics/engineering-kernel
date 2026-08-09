@@ -61,11 +61,18 @@ func (idx *Indexer) Index(ctx context.Context, repo domain.Repository) (kernel.I
 	}
 	result.Scanned = len(raws)
 
+	// Once per run, not per document: the repository's statement about
+	// its own directories does not change mid-index (RFC-0007).
+	taxonomy, err := loadTaxonomy(repo)
+	if err != nil {
+		return result, err
+	}
+
 	for _, raw := range raws {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		idx.indexOne(ctx, repo, raw, &result)
+		idx.indexOne(ctx, repo, taxonomy, raw, &result)
 	}
 
 	if err := idx.finish(ctx, &repo, result, true); err != nil {
@@ -92,11 +99,16 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 	}
 	result.Scanned = len(changed)
 
+	taxonomy, err := loadTaxonomy(repo)
+	if err != nil {
+		return result, err
+	}
+
 	for _, raw := range changed {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		idx.indexOne(ctx, repo, raw, &result)
+		idx.indexOne(ctx, repo, taxonomy, raw, &result)
 	}
 
 	for _, path := range deletedPaths {
@@ -105,7 +117,7 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 		}
 		docID := domain.DocumentID(repo.ID, path)
 		if err := idx.Storage.DeleteDocument(ctx, docID); err != nil {
-			result.Errors++
+			result.Fail(path, "delete: "+err.Error())
 			continue
 		}
 		result.Deleted++
@@ -121,31 +133,42 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 // unchanged) -> graph.Extract -> Chunker -> Storage, updating result as
 // it goes. Errors at any stage count against result.Errors and move on
 // to the next file — one bad file must not abort the whole run.
-func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw domain.RawDocument, result *kernel.IndexResult) {
+func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, taxonomy domain.Taxonomy, raw domain.RawDocument, result *kernel.IndexResult) {
 	parser := idx.pickParser(raw)
 	if parser == nil {
-		result.Errors++
+		result.Fail(raw.Path, "no parser handles this file type")
 		return
 	}
 
 	doc, err := parser.Parse(ctx, raw)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "parse: "+err.Error())
 		return
 	}
 
 	doc, err = idx.Normalizer.Normalize(ctx, doc)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "normalize: "+err.Error())
 		return
 	}
 
+	// After classification, before storage: fills in what the kernel's
+	// own vocabulary could not name, and never overrules it.
+	applyTaxonomy(taxonomy, &doc)
+
 	existing, found, err := idx.Storage.FindDocumentByPath(ctx, repo.ID, doc.Path)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "lookup: "+err.Error())
 		return
 	}
-	if found && doc.ContentHash != "" && existing.ContentHash == doc.ContentHash {
+	// Unchanged means unchanged *as indexed*, not merely byte-identical.
+	// Classification is an input too: adding a .engineering.yaml to a
+	// repository changes no markdown file's bytes, so a content-hash-only
+	// check skipped every existing row and left it `unknown` — which made
+	// RFC-0007 work on a fresh index and do nothing on the upgrade path
+	// every real adopter is on. Found reviewing that change before it
+	// merged.
+	if found && doc.ContentHash != "" && existing.ContentHash == doc.ContentHash && existing.Type == doc.Type {
 		result.Unchanged++
 		return
 	}
@@ -153,7 +176,7 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw do
 	if idx.Resolver != nil {
 		rels, err := graph.Extract(ctx, doc, idx.Resolver)
 		if err != nil {
-			result.Errors++
+			result.Fail(raw.Path, "link extraction: "+err.Error())
 			return
 		}
 		doc.Relationships = append(doc.Relationships, rels...)
@@ -161,16 +184,16 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw do
 
 	chunks, err := idx.Chunker.Chunk(ctx, doc)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "chunk: "+err.Error())
 		return
 	}
 
 	if err := idx.Storage.PutDocument(ctx, doc); err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "write document: "+err.Error())
 		return
 	}
 	if err := idx.Storage.PutChunks(ctx, doc.ID, chunks); err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "write chunks: "+err.Error())
 		return
 	}
 

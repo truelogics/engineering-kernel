@@ -26,6 +26,9 @@ var labelByDocType = map[domain.DocType]string{
 	domain.DocTypeRFC:      "Related RFCs",
 	domain.DocTypeRoadmap:  "Roadmap",
 	domain.DocTypeReadme:   "Documentation",
+	// RFC-0007 canonical types with no prior name here.
+	domain.DocTypeSpecification: "Specifications",
+	domain.DocTypeGuide:         "Guides",
 }
 
 // alwaysShownEmpty are sections with no producer yet (RFC-0001's
@@ -37,8 +40,8 @@ var alwaysShownEmpty = []string{"Related Issues", "Related PRs"}
 // ..., README) as closely as this kernel's actual Knowledge Types allow.
 // Milestone 7: this used to be the only order; now it's just the default.
 var defaultPriority = []string{
-	"Architecture", "Related ADRs", "Rules", "Related RFCs", "Roadmap",
-	"Documentation", "Related Issues", "Related PRs",
+	"Architecture", "Related ADRs", "Rules", "Related RFCs", "Specifications",
+	"Guides", "Roadmap", "Documentation", "Related Issues", "Related PRs",
 }
 
 // stopwords are dropped when turning a free-text task ("Review the
