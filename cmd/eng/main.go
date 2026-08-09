@@ -61,7 +61,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "eng add: replaced by `eng workspace attach <path>`")
 		os.Exit(1)
 	case "doctor":
-		fmt.Fprintf(os.Stderr, "eng %s: not yet implemented (see docs/cli/CLI.md)\n", cmd)
+		// Diagnostics live in engineering-mcp, not here. Four of the six
+		// questions a stuck developer asks are about MCP and Claude Code,
+		// which this kernel knows nothing about and should not learn.
+		fmt.Fprintln(os.Stderr, "eng doctor: use `engineering-mcp doctor`, which checks the index, the workspace, and the Claude Code side together.")
 		os.Exit(1)
 	default:
 		printUsage()
@@ -103,8 +106,8 @@ Workspace (a workspace is one index over one or more repositories):
   workspace attach <path>     attach a repository and index it
   workspace detach <path>     remove a repository and its documents
 
-Planned, not yet implemented (see docs/cli/CLI.md):
-  doctor`)
+Diagnostics:
+  engineering-mcp doctor      check the index, the workspace and Claude Code together`)
 }
 
 func runWorkspace(ctx context.Context, args []string) error {

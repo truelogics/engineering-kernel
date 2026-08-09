@@ -203,6 +203,16 @@ func workspaceRepositories(ctx context.Context, store kernel.Storage, absDir str
 // the source of truth for what changed — RFC-0003/GRAPH.md. Falls back
 // to a full Index when the repo has never been indexed or isn't a git
 // repository (Indexer.Sync's own fallback).
+//
+// Like Index, this covers every repository attached to the workspace at
+// dir. It used to sync dir alone, registering it as a repository if it
+// wasn't one — so on a workspace whose root is a parent of several
+// repositories, `eng sync` skipped all of them and indexed their
+// documents a second time under the root's name. The user's own
+// `eng workspace detach .` was undone by the next sync, silently, and
+// `repository:path` citations stopped distinguishing repositories.
+// Found by following the install documentation on a clean machine
+// (Sprint 15, Milestone 5).
 func Sync(ctx context.Context, dir string, out io.Writer) error {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -215,22 +225,30 @@ func Sync(ctx context.Context, dir string, out io.Writer) error {
 	}
 	defer store.Close()
 
-	repo, _, err := findOrCreateRepository(ctx, store, absDir)
-	if err != nil {
-		return fmt.Errorf("sync: %w", err)
-	}
-	if err := store.PutRepository(ctx, repo); err != nil {
-		return fmt.Errorf("sync: %w", err)
-	}
-
-	result, err := newIndexer(store).Sync(ctx, repo)
+	repos, err := workspaceRepositories(ctx, store, absDir)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d deleted, %d errors\n",
-		repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Deleted, result.Errors)
-	printFailures(out, result.Failures)
+	idx := newIndexer(store)
+	var failed []string
+	for _, repo := range repos {
+		result, err := idx.Sync(ctx, repo)
+		if err != nil {
+			// One repository must not take the workspace down with it,
+			// for the same reason as Index.
+			fmt.Fprintf(out, "%s: FAILED — %v\n", repo.Name, err)
+			failed = append(failed, repo.Name)
+			continue
+		}
+		fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d deleted, %d errors\n",
+			repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Deleted, result.Errors)
+		printFailures(out, result.Failures)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("sync: %d of %d repositories failed: %s",
+			len(failed), len(repos), strings.Join(failed, ", "))
+	}
 	return nil
 }
 

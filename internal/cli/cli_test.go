@@ -305,6 +305,66 @@ func TestWorkspaceAttachMakesAnotherRepositoryRetrievable(t *testing.T) {
 	}
 }
 
+// TestSyncCoversTheWholeWorkspace is the install documentation's own
+// refresh step, as a test.
+//
+// `eng sync` used to sync the workspace directory alone, registering it
+// as a repository when it wasn't one. On the layout the documentation
+// recommends — a workspace root that is the *parent* of several
+// repositories, detached on purpose so citations stay distinguishable —
+// that meant sync skipped every attached repository, silently undid the
+// detach, and indexed all their documents a second time under the root's
+// name. Found on a clean machine by following INSTALL.md.
+func TestSyncCoversTheWholeWorkspace(t *testing.T) {
+	ctx := context.Background()
+
+	root := t.TempDir()
+	app := filepath.Join(root, "app")
+	knowledge := filepath.Join(root, "knowledge")
+	for _, d := range []string{app, knowledge} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, app, "README.md", "---\ndoc: README\n---\n\n# App\n\nThe billing service writes invoices.\n")
+	writeFile(t, knowledge, "rules/no-raw-sql.md",
+		"---\ndoc: RULE\nid: no-raw-sql\n---\n\n# Rule\n\nBilling code never writes raw SQL for invoices.\n")
+
+	var out strings.Builder
+	if err := WorkspaceCreate(ctx, root, &out); err != nil {
+		t.Fatalf("WorkspaceCreate: %v", err)
+	}
+	// What the documentation tells the reader to do, and the reason the
+	// bug was invisible: the root is a container, not a repository.
+	if err := WorkspaceDetach(ctx, root, root, &out); err != nil {
+		t.Fatalf("WorkspaceDetach: %v", err)
+	}
+	if err := WorkspaceAttach(ctx, root, app, &out); err != nil {
+		t.Fatalf("WorkspaceAttach app: %v", err)
+	}
+	if err := WorkspaceAttach(ctx, root, knowledge, &out); err != nil {
+		t.Fatalf("WorkspaceAttach knowledge: %v", err)
+	}
+
+	var syncOut strings.Builder
+	if err := Sync(ctx, root, &syncOut); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	for _, want := range []string{"app:", "knowledge:"} {
+		if !strings.Contains(syncOut.String(), want) {
+			t.Errorf("sync did not cover %s — it must re-index every attached repository:\n%s", want, syncOut.String())
+		}
+	}
+
+	var statusOut strings.Builder
+	if err := Status(ctx, root, &statusOut); err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if strings.Contains(statusOut.String(), filepath.Base(root)) {
+		t.Errorf("sync re-attached the workspace root, duplicating every document under one name:\n%s", statusOut.String())
+	}
+}
+
 func TestWorkspaceDetachUnknownRepositoryFails(t *testing.T) {
 	dir := t.TempDir()
 	var out strings.Builder
