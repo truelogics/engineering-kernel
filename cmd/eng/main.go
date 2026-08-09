@@ -12,12 +12,29 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/truelogics/ai-memory/internal/cli"
 )
 
-const version = "0.2.0"
+// version is read from the build rather than hard-coded. The constant
+// spelling said 0.1.0-dev through twelve sprints and one release, and
+// then said 0.2.0 in a commit tagged v0.2.1 — a version string drifts
+// from its tag by default, and there is no reason for a developer
+// comparing two machines to be the one who notices.
+//
+// devVersion is what a `go build` from a working tree reports, since
+// there is no module version to read in that case.
+const devVersion = "dev"
+
+func version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" || info.Main.Version == "(devel)" {
+		return devVersion
+	}
+	return info.Main.Version
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -31,7 +48,7 @@ func main() {
 	var err error
 	switch cmd {
 	case "version", "--version", "-v":
-		fmt.Println("eng version " + version)
+		fmt.Println("eng version " + version())
 		return
 	case "help", "--help", "-h":
 		printUsage(os.Stdout)
