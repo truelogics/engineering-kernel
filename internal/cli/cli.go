@@ -159,6 +159,7 @@ func Index(ctx context.Context, dir string, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
 			repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
+		printFailures(out, result.Failures)
 	}
 	return nil
 }
@@ -218,6 +219,7 @@ func Sync(ctx context.Context, dir string, out io.Writer) error {
 
 	fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d deleted, %d errors\n",
 		repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Deleted, result.Errors)
+	printFailures(out, result.Failures)
 	return nil
 }
 
@@ -443,6 +445,7 @@ func WorkspaceAttach(ctx context.Context, dir, repoPath string, out io.Writer) e
 	fmt.Fprintf(out, "%s %s (%s)\n", verb, repo.Name, absRepo)
 	fmt.Fprintf(out, "  %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
 		result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
+	printFailures(out, result.Failures)
 	return nil
 }
 
@@ -491,4 +494,19 @@ func WorkspaceDetach(ctx context.Context, dir, repoPath string, out io.Writer) e
 
 	fmt.Fprintf(out, "Detached %s (%s): %d documents removed\n", repo.Name, absRepo, len(docs))
 	return nil
+}
+
+// printFailures names the files an index run could not process. A bare
+// error count is unactionable: it says something is wrong and gives a
+// developer nowhere to start. Capped, because a broken parser would
+// otherwise print one line per file in the repository.
+func printFailures(out io.Writer, failures []kernel.IndexFailure) {
+	const shown = 10
+	for i, f := range failures {
+		if i == shown {
+			fmt.Fprintf(out, "  ... and %d more\n", len(failures)-shown)
+			break
+		}
+		fmt.Fprintf(out, "  ! %s: %s\n", f.Path, f.Reason)
+	}
 }

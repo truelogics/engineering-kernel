@@ -105,7 +105,7 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 		}
 		docID := domain.DocumentID(repo.ID, path)
 		if err := idx.Storage.DeleteDocument(ctx, docID); err != nil {
-			result.Errors++
+			result.Fail(path, "delete: "+err.Error())
 			continue
 		}
 		result.Deleted++
@@ -124,25 +124,25 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw domain.RawDocument, result *kernel.IndexResult) {
 	parser := idx.pickParser(raw)
 	if parser == nil {
-		result.Errors++
+		result.Fail(raw.Path, "no parser handles this file type")
 		return
 	}
 
 	doc, err := parser.Parse(ctx, raw)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "parse: "+err.Error())
 		return
 	}
 
 	doc, err = idx.Normalizer.Normalize(ctx, doc)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "normalize: "+err.Error())
 		return
 	}
 
 	existing, found, err := idx.Storage.FindDocumentByPath(ctx, repo.ID, doc.Path)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "lookup: "+err.Error())
 		return
 	}
 	if found && doc.ContentHash != "" && existing.ContentHash == doc.ContentHash {
@@ -153,7 +153,7 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw do
 	if idx.Resolver != nil {
 		rels, err := graph.Extract(ctx, doc, idx.Resolver)
 		if err != nil {
-			result.Errors++
+			result.Fail(raw.Path, "link extraction: "+err.Error())
 			return
 		}
 		doc.Relationships = append(doc.Relationships, rels...)
@@ -161,16 +161,16 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw do
 
 	chunks, err := idx.Chunker.Chunk(ctx, doc)
 	if err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "chunk: "+err.Error())
 		return
 	}
 
 	if err := idx.Storage.PutDocument(ctx, doc); err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "write document: "+err.Error())
 		return
 	}
 	if err := idx.Storage.PutChunks(ctx, doc.ID, chunks); err != nil {
-		result.Errors++
+		result.Fail(raw.Path, "write chunks: "+err.Error())
 		return
 	}
 
