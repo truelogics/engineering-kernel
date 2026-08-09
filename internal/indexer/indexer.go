@@ -61,11 +61,18 @@ func (idx *Indexer) Index(ctx context.Context, repo domain.Repository) (kernel.I
 	}
 	result.Scanned = len(raws)
 
+	// Once per run, not per document: the repository's statement about
+	// its own directories does not change mid-index (RFC-0007).
+	taxonomy, err := loadTaxonomy(repo)
+	if err != nil {
+		return result, err
+	}
+
 	for _, raw := range raws {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		idx.indexOne(ctx, repo, raw, &result)
+		idx.indexOne(ctx, repo, taxonomy, raw, &result)
 	}
 
 	if err := idx.finish(ctx, &repo, result, true); err != nil {
@@ -92,11 +99,16 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 	}
 	result.Scanned = len(changed)
 
+	taxonomy, err := loadTaxonomy(repo)
+	if err != nil {
+		return result, err
+	}
+
 	for _, raw := range changed {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		idx.indexOne(ctx, repo, raw, &result)
+		idx.indexOne(ctx, repo, taxonomy, raw, &result)
 	}
 
 	for _, path := range deletedPaths {
@@ -121,7 +133,7 @@ func (idx *Indexer) Sync(ctx context.Context, repo domain.Repository) (kernel.In
 // unchanged) -> graph.Extract -> Chunker -> Storage, updating result as
 // it goes. Errors at any stage count against result.Errors and move on
 // to the next file — one bad file must not abort the whole run.
-func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw domain.RawDocument, result *kernel.IndexResult) {
+func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, taxonomy domain.Taxonomy, raw domain.RawDocument, result *kernel.IndexResult) {
 	parser := idx.pickParser(raw)
 	if parser == nil {
 		result.Fail(raw.Path, "no parser handles this file type")
@@ -139,6 +151,10 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, raw do
 		result.Fail(raw.Path, "normalize: "+err.Error())
 		return
 	}
+
+	// After classification, before storage: fills in what the kernel's
+	// own vocabulary could not name, and never overrules it.
+	applyTaxonomy(taxonomy, &doc)
 
 	existing, found, err := idx.Storage.FindDocumentByPath(ctx, repo.ID, doc.Path)
 	if err != nil {
