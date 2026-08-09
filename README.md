@@ -15,6 +15,20 @@ organize, retrieve, and connect engineering knowledge. Everything else in the
 OS (context, intelligence, workflows) gets built on top of this, the same way
 an OS grows outward from a kernel — it doesn't start as one.
 
+It also ships `eng`, which is the **shell of the Engineering OS**
+(`engineering/RFC-0008-eng-cli.md`) rather than this repository's CLI. `eng`
+coordinates; where a capability lives elsewhere, it delegates — `eng doctor`
+runs `engineering-mcp doctor`, `eng review` hands over to Claude Code. A
+developer should never need to know which repository answers a question.
+
+```bash
+eng init          # create a workspace here
+eng taxonomy      # what this repository's directories mean
+eng index         # index every repository in the workspace
+eng doctor        # check this machine end to end
+eng review        # check the setup, then hand over to Claude Code
+```
+
 A persistent context layer for agents. It ingests engineering docs, decisions,
 and conventions so AI systems can remember, enforce, and assist across sessions.
 

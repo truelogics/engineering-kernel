@@ -1,230 +1,191 @@
 ---
 doc: CLI
 audience: [human, agent]
-status: draft
+status: living
 owner: ai-memory
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-10
 ---
 
-# CLI
+# eng — the Engineering OS shell
 
-> Companion to [RFC-0001](../../rfcs/0001-engineering-memory-kernel.md),
-> [ARCHITECTURE.md](../architecture/ARCHITECTURE.md), and
-> [DATABASE.md](../architecture/DATABASE.md). `eng sync` (designed in
-> [RFC-0003](../../rfcs/0003-engineering-intelligence.md)) is an eighth,
-> not-yet-implemented command.
+`eng` is the entry point to the whole Engineering OS, not the CLI of this
+repository (`engineering/RFC-0008-eng-cli.md`). It coordinates and
+delegates; where a capability lives somewhere else, it runs that thing
+rather than reimplementing it.
 
-## Note on scope: 5 commands vs. 7
+| Layer | Owner |
+|---|---|
+| kernel — index, retrieve, classify | this repository |
+| transport — MCP, Claude Code | `engineering-mcp` |
+| reasoning — the review itself | the client |
+| **coordination** | **`eng`** |
 
-RFC-0001's CLI section originally listed five commands (`init`, `index`,
-`search`, `ask`, `status`). The Week 1 plan's CLI task specified seven,
-adding `add` and `doctor`. That was a real discrepancy, not a stylistic one —
-RFC-0001 has since been patched to match this document's seven. Keeping the
-reasoning here since it's still the source of truth for *why*:
+The point of the arrangement is that a developer never has to know which
+row answers their question.
 
-- **`add`** earns its place: without it, a multi-repo Workspace (the whole
-  point of indexing `ai-memory` + `engineering` + `roadmap` + `vision`
-  together) has no CLI entry point — `init` only bootstraps the workspace
-  against the current directory's repo. `add` registers one more Repository
-  into an existing Workspace. It does **not** mean "add a single document" —
-  `index` already discovers documents by walking a repo, so a
-  document-level add would duplicate that.
-- **`doctor`** also earns its place: `status` reports whether the index is
-  stale (needs re-running `eng index`); `doctor` diagnoses whether the index
-  is *broken* (orphaned chunks, dangling foreign keys, a registered repo
-  whose `local_path` no longer exists). Different failure class, matches the
-  `git fsck` / `brew doctor` convention.
+This document supersedes an earlier draft that described a designed
+surface of seven commands including `add` and an index-integrity
+`doctor`. Neither exists: `add` became `workspace attach`, and `doctor`
+became the machine-wide check that `engineering-mcp` implements and `eng`
+delegates to. What follows is what the binary does.
 
-Net: this reconciles to **7 commands**, matching RFC-0001.
+## Getting started
 
-## Commands
+### `eng init [path]`
 
-### `eng init`
+Creates `.eng/memory.db` and registers the directory as a repository.
+`eng workspace create` is the same command under the workspace
+vocabulary.
 
-**Purpose:** Bootstrap a new Workspace in the current directory. Creates
-`.eng/memory.db` and registers the current directory's git repo as the
-first Repository.
+When the workspace root is a *parent* of several repositories — the
+layout that lets a review see both your code and your rulebook — detach
+it immediately afterwards, because a container is not a repository:
 
-**Arguments:** none in v1.
-
-**Output:** confirmation and the path to the created database.
-
-**Example:**
-
-```
-$ cd ai-memory && eng init
-Created workspace at .eng/memory.db
-Registered repository: ai-memory (.)
+```bash
+eng init .
+eng workspace detach .
+eng workspace attach ./your-app
+eng workspace attach ./your-rules-repo
 ```
 
-### `eng add <path>`
+Left attached, every child repository's documents are indexed a second
+time under the root's name, and `repository:path` citations stop
+distinguishing them.
 
-**Purpose:** Register another local repository into the current Workspace,
-so `eng index` and `eng search` span it too.
+### `eng taxonomy`
 
-**Arguments:** `path` (required) — path to another git repo, typically a
-sibling directory (`../engineering`, `../roadmap`, `../vision`).
+Shows what this repository has declared its directories mean
+(`.engineering.yaml`, RFC-0007), or explains how to say so when it has
+not. Nothing is written for you — see `taxonomy suggest` below.
 
-**Output:** confirmation and the new repository row summary.
+### `eng index [path]`
 
-**Example:**
-
-```
-$ eng add ../engineering
-Registered repository: engineering (../engineering)
-Workspace now spans 2 repositories. Run `eng index` to index it.
-```
-
-### `eng index`
-
-**Purpose:** Walk every registered repository, parse markdown files, and
-populate `documents` / `document_chunks` / `tags` / `relationships` (see
-[`../architecture/DATABASE.md`](../architecture/DATABASE.md)). Skips files
-whose `content_hash` hasn't changed since the last run.
-
-**Arguments:**
-- `--repo <name>` — index only one registered repository
-- `--full` — ignore `content_hash`, re-parse everything
-
-**Output:** per-repo summary — files scanned, added, updated, unchanged,
-errors.
-
-**Example:**
-
-```
-$ eng index
-ai-memory:    42 scanned, 3 added, 1 updated, 38 unchanged
-engineering:  118 scanned, 0 added, 5 updated, 113 unchanged
-Indexed in 0.4s
-```
-
-### `eng search "<query>"`
-
-**Purpose:** Ranked full-text search across all indexed chunks in the
-Workspace.
-
-**Arguments:**
-- `query` (required, positional)
-- `--repo <name>` — restrict to one repository
-- `--type <doc_type>` — restrict to `adr`, `rule`, `standard`, etc.
-- `--limit <n>` — default 10
-
-**Output:** ranked list — file, score, matched snippet, related files.
-
-**Example:**
-
-```
-$ eng search "authentication"
-1. engineering/ADR/0003-jwt-auth.md          score 0.91
-   "...we chose JWT for stateless auth because..."
-   related: engineering/ARCHITECTURE.md, ai-memory/rfcs/0001-*.md
-
-2. README.md                                  score 0.42
-   "...authentication is handled by..."
-```
-
-### `eng ask "<question>"` (also `eng context --task "<description>"`)
-
-**Purpose:** Retriever bundle for a natural-language question — groups
-`eng search` results into labeled sections. No LLM, no generated prose (see
-[`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md)'s Retriever).
-Implemented in Step 8's Milestone 6. `eng context --task "..."` is the same
-pipeline under Step 8's Definition of Done's command name — a task
-("Review authentication PR") and a question are the same input shape to
-`Retriever`, so both call `internal/cli.Context`. Group labels actually
-shipped: Architecture, Related ADRs, Rules, Related RFCs, Roadmap,
-Documentation, Related Issues, Related PRs (the last two always present,
-always empty — nothing ingests those yet).
-
-**Arguments:** `question` (required, positional)
-
-**Output:** structured bundle, empty sections shown so it's clear what
-isn't covered yet (e.g. PRs, until Milestone 2 ingests them).
-
-**Example:**
-
-```
-$ eng ask "how does authentication work?"
-
-Architecture docs:
-  - engineering/ARCHITECTURE.md
-
-ADRs:
-  - engineering/ADR/0003-jwt-auth.md
-
-Rules:
-  - engineering/rules/auth-required.yaml
-
-Related PRs:
-  (none indexed — PR ingestion is Milestone 2)
-```
-
-### `eng status`
-
-**Purpose:** Report index health per registered repository — is it built,
-and is it current.
-
-**Arguments:** `--repo <name>` — restrict to one repository
-
-**Output:** table of repos with document count, last indexed commit/time,
-and staleness (current `HEAD` vs. `last_indexed_commit`).
-
-**Example:**
-
-```
-$ eng status
-REPOSITORY    DOCS  LAST INDEXED       STATUS
-ai-memory     45    2026-08-02 09:14   clean
-engineering   123   2026-08-01 18:02   stale (3 commits behind)
-```
+Runs the full pipeline for **every repository attached to the
+workspace**, not just the path given. The workspace is the indexing
+boundary, so it is also the re-indexing boundary.
 
 ### `eng doctor`
 
-**Purpose:** Diagnose problems `status` doesn't catch: orphaned
-`document_chunks` with no parent `documents` row, a registered repository
-whose `local_path` no longer exists on disk, schema version mismatch.
+Runs `engineering-mcp doctor`, which checks the binaries, the workspace,
+the index, the retrieval, the Claude Code registration, the MCP handshake
+and the `/review-branch` command, and names the first thing that is
+wrong.
 
-**Arguments:** none in v1. `--fix` (safe auto-repairs, e.g. pruning orphaned
-rows) is deferred — v1 reports only, doesn't mutate.
+Delegation rather than a second implementation: two sets of checks would
+drift, and then disagree about a machine neither could fix. When
+`engineering-mcp` is not installed, `eng` says so and reports the
+workspace facts it can establish alone.
 
-**Output:** list of issues found, or a clean bill of health.
+### `eng review`
 
-**Example:**
+Does not review anything. Checks that there is a repository, a workspace,
+and an index containing this repository, then hands over to Claude Code
+with the exact words to use.
 
-```
-$ eng doctor
-✓ 2 repositories registered, both resolve on disk
-✓ no orphaned document_chunks
-✓ schema version matches (v1)
-Workspace healthy.
-```
+Type `/review-branch` rather than describing the task. Measured on this
+organization's own repository, same commit, minutes apart: asked as
+"Review my current branch.", another installed review skill claimed the
+request and Engineering OS was called zero times in 37 tool calls; asked
+as `/review-branch`, nine times in 59. See
+`engineering-mcp/docs/reports/TOOL_DISCOVERY_EXPERIMENT.md`.
 
-### `eng sync` *(designed in [RFC-0003](../../rfcs/0003-engineering-intelligence.md)/[GRAPH.md](../architecture/GRAPH.md) — not implemented)*
+`--no-launch` prints the instructions without starting Claude Code.
 
-**Purpose:** Incremental re-index using git as the source of truth for
-what changed since `repository.last_indexed_commit` — skips reading
-unchanged files entirely (`eng index` still reads every file to compute
-its content hash). Also removes rows for files deleted since the last
-sync, which `eng index` deliberately does not do.
+## Everyday
 
-**Arguments:** none in v1 — same directory-discovery convention as the
-other commands.
+### `eng update [path]` (alias `eng sync`)
 
-**Output:** same shape as `eng index`, plus a deleted count.
+Incremental re-index using git as the source of truth for what changed,
+including removing rows for deleted files. Covers every attached
+repository, like `index`.
 
-**Example:**
+### `eng status [path]`
 
-```
-$ eng sync
-ai-memory: 3 scanned, 1 added, 2 updated, 0 unchanged, 1 deleted, 0 errors
-```
+Which workspace answered, whether this repository declares a taxonomy,
+how many rules are indexed, how many documents remain unclassified, then
+a row per repository.
+
+The rule count is the load-bearing line. A workspace holding no rules
+answers every question about them with a confident "none", which reads
+exactly like a correct answer.
+
+### `eng search <query>`
+
+Ranked full-text search across the workspace. Every result is qualified
+as `repository:path`, because a path is unique only within a repository.
+
+### `eng ask <question>` / `eng context --task "<description>"`
+
+Assembles the engineering context for a question or a task: rules, ADRs,
+and related documents, grouped by what they are.
+
+## Workspace
+
+A workspace is one `.eng/memory.db` over one or more repositories,
+searched together.
+
+| Command | |
+|---|---|
+| `workspace create [path]` | create a workspace and register its own directory |
+| `workspace attach <path>` | attach a repository and index it |
+| `workspace detach <path>` | remove a repository and its documents |
+| `workspace list` | every attached repository, with document counts |
+| `workspace status` | documents, rules, and what this workspace can answer |
+
+`attach` and `detach` act on the workspace in the **current directory**.
+They cannot be told which workspace to use and will not create one, so
+run them from the workspace root.
+
+## Meaning
+
+### `eng taxonomy validate`
+
+Parses `.engineering.yaml` and, when the repository is indexed, reports
+what it actually achieves: how many documents are already classified, how
+many the file would rescue on the next index, and how many would remain
+unknown.
+
+Parsing alone is a weak check. A taxonomy can be perfectly well-formed
+and match nothing, which is indistinguishable from not having written
+one.
+
+### `eng taxonomy suggest`
+
+Deliberately not implemented. A taxonomy is a claim about what your
+directories mean, and an inference from directory names presented as a
+suggestion is how a wrong mapping gets accepted without anyone deciding
+it. `engineering/VALIDATION_PHASE_1.md` is explicit that mappings are
+never invented for a repository by someone who does not work in it, and
+that includes this tool.
+
+## Machine
+
+### `eng config [path]`
+
+The effective configuration for this directory: the workspace that
+resolves here, the index path, whether a taxonomy is present, and where
+`engineering-mcp`, `claude` and `git` are found.
+
+`ENGINEERING_WORKSPACE` is listed and labelled: it is read by
+`engineering-mcp`, never by `eng`, which resolves the workspace from the
+directory it runs in.
+
+### `eng clean [path] --yes`
+
+Deletes the generated `.eng/` directory. Refuses without `--yes`, and
+names the repositories that are attached first — the index rebuilds from
+your documents, but the record of *which repositories were attached* does
+not exist anywhere else.
+
+### `eng version`
 
 ## Conventions
 
-- Exit code `0`: success. `1`: usage/argument error. `2` (doctor only):
-  issues found.
-- All commands operate on the Workspace found by walking up from the
-  current directory to `.eng/` — same convention as `.git`.
-- No command in this list makes a network call or reads an API key. If a
-  future flag needs one (Milestone 3's AI layer), it's a new command, not a
-  flag bolted onto one of these eight.
+- Every command takes an optional path, defaulting to the current
+  directory, except `search`, `ask` and `doctor`, which act on the
+  workspace resolved from where you are.
+- Failures name the file and the stage. An index that reports `1 errors`
+  and nothing else has already cost this organization twice.
+- An empty answer is stated, not implied. "No rule governs these files"
+  and "I did not look" are different, and silence cannot distinguish
+  them.

@@ -350,6 +350,14 @@ func Status(ctx context.Context, dir string, out io.Writer) error {
 		return nil
 	}
 
+	// The header states which workspace answered and whether it holds a
+	// rulebook, before any per-repository numbers. Both are things a
+	// developer reading a surprising review needs first: healthy counts
+	// from the wrong workspace look exactly like healthy counts.
+	if err := statusHeader(ctx, store, absDir, out); err != nil {
+		return err
+	}
+
 	fmt.Fprintf(out, "%-20s %6s  %-19s  %s\n", "REPOSITORY", "DOCS", "LAST INDEXED", "STATUS")
 	for _, repo := range repos {
 		state, ok, err := store.GetIndexState(ctx, repo.ID)
