@@ -57,6 +57,14 @@ type FileContext struct {
 	Snippet    string
 }
 
+// ContextOptions narrows what Memory.ContextFor returns (RFC-0005).
+type ContextOptions struct {
+	// ChangedPaths are the repository-relative files the task concerns.
+	// When set, the Rules section is filtered to rules whose applies_to
+	// governs at least one of them. Empty applies no scoping.
+	ChangedPaths []string
+}
+
 // ContextPackage is Memory.Context's return value — the structured
 // contract between AI Memory and a programmatic consumer (RFC-0004),
 // replacing internal/contextbuilder's flat text for anything other than

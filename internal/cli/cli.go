@@ -278,7 +278,7 @@ func Context(ctx context.Context, dir, task string, out io.Writer) error {
 	defer store.Close()
 
 	hybrid := &search.Search{Storage: store, Graph: graph.New(store)}
-	bundle, err := retriever.New(hybrid).Retrieve(ctx, task)
+	bundle, err := (&retriever.Retriever{Search: hybrid, Storage: store}).Retrieve(ctx, task, kernel.RetrieveOptions{})
 	if err != nil {
 		return fmt.Errorf("context: %w", err)
 	}

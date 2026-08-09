@@ -169,6 +169,7 @@ func TestInferDocTypeByPathConvention(t *testing.T) {
 // rules partly because of this.
 func TestInferDocTypeDirectoryOutranksFileName(t *testing.T) {
 	cases := map[string]domain.DocType{
+		// No front matter: the directory decides.
 		"rules/README.md":           domain.DocTypeRule,
 		"engineering/ADR/README.md": domain.DocTypeADR,
 		"rfcs/README.md":            domain.DocTypeRFC,
@@ -234,5 +235,18 @@ func TestParsePreservesNumericFrontMatterFormatting(t *testing.T) {
 	}
 	if v, ok := doc.Metadata.Get("count"); !ok || v != "007" {
 		t.Fatalf("Metadata[count] = (%q, %v), want (%q, true)", v, ok, "007")
+	}
+}
+
+// TestInferDocTypeIndexPagesAreDocumentation covers the other half:
+// a page that declares itself an index is documentation about a
+// directory, not an instance of what the directory holds. Without this,
+// scope-selected rule retrieval returns the rules index in every review,
+// since an index carries no applies_to and is therefore universal.
+func TestInferDocTypeIndexPagesAreDocumentation(t *testing.T) {
+	meta := domain.NewMetadata()
+	meta.Set("doc", "rules-index")
+	if got := inferDocType("rules/README.md", meta); got != domain.DocTypeReadme {
+		t.Errorf("inferDocType(rules/README.md, doc: rules-index) = %q, want %q", got, domain.DocTypeReadme)
 	}
 }

@@ -52,7 +52,7 @@ func TestRetrieveGroupsByDocType(t *testing.T) {
 	putDoc(t, ctx, storage, repo.ID, "rules/auth.md", "authentication must use JWT tokens", domain.DocTypeRule)
 
 	r := New(search.New(storage))
-	bundle, err := r.Retrieve(ctx, "authentication")
+	bundle, err := r.Retrieve(ctx, "authentication", kernel.RetrieveOptions{})
 	if err != nil {
 		t.Fatalf("Retrieve: unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestRetrieveNoMatches(t *testing.T) {
 	putDoc(t, ctx, storage, repo.ID, "a.md", "totally unrelated content", domain.DocTypeReadme)
 
 	r := New(search.New(storage))
-	bundle, err := r.Retrieve(ctx, "zzzznonexistentterm")
+	bundle, err := r.Retrieve(ctx, "zzzznonexistentterm", kernel.RetrieveOptions{})
 	if err != nil {
 		t.Fatalf("Retrieve: unexpected error: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestRetrieveDefaultPriorityOrder(t *testing.T) {
 	putDoc(t, ctx, storage, repo.ID, "arch.md", "authentication", domain.DocTypeStandard)
 
 	r := New(search.New(storage))
-	bundle, err := r.Retrieve(ctx, "authentication")
+	bundle, err := r.Retrieve(ctx, "authentication", kernel.RetrieveOptions{})
 	if err != nil {
 		t.Fatalf("Retrieve: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestRetrieveCustomPriorityReordersGroups(t *testing.T) {
 	putDoc(t, ctx, storage, repo.ID, "rule.md", "authentication", domain.DocTypeRule)
 
 	r := &Retriever{Search: search.New(storage), Priority: []string{"Rules", "Related ADRs"}}
-	bundle, err := r.Retrieve(ctx, "authentication")
+	bundle, err := r.Retrieve(ctx, "authentication", kernel.RetrieveOptions{})
 	if err != nil {
 		t.Fatalf("Retrieve: %v", err)
 	}
@@ -193,5 +193,126 @@ func TestRetrieveCustomPriorityReordersGroups(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("group order = %v, want Architecture still present even though the custom Priority didn't mention it", labels)
+	}
+}
+
+// putScopedRule stores a rule document declaring an applies_to scope.
+func putScopedRule(t *testing.T, ctx context.Context, storage kernel.Storage, repoID, path, content, appliesTo string) {
+	t.Helper()
+	doc, err := domain.NewCanonicalDocument(repoID, repoID, path)
+	if err != nil {
+		t.Fatalf("NewCanonicalDocument: %v", err)
+	}
+	doc.Content = content
+	doc.Type = domain.DocTypeRule
+	doc.Metadata = domain.NewMetadata()
+	if appliesTo != "" {
+		doc.Metadata.Set(domain.AppliesToKey, appliesTo)
+	}
+	if err := storage.PutDocument(ctx, doc); err != nil {
+		t.Fatalf("PutDocument: %v", err)
+	}
+	chunk, err := domain.NewChunk(doc.ID, 0, "", content)
+	if err != nil {
+		t.Fatalf("NewChunk: %v", err)
+	}
+	if err := storage.PutChunks(ctx, doc.ID, []domain.Chunk{chunk}); err != nil {
+		t.Fatalf("PutChunks: %v", err)
+	}
+}
+
+func rulePaths(bundle kernel.RetrievalBundle) []string {
+	var out []string
+	for _, g := range bundle.Groups {
+		if g.Label != "Rules" {
+			continue
+		}
+		for _, r := range g.Results {
+			out = append(out, r.Document.Path)
+		}
+	}
+	return out
+}
+
+// TestRetrieveScopesRulesToChangedPaths is RFC-0005's motivating case:
+// the first cross-repository retrieval this kernel ever performed
+// returned rules/ts-no-floating-promises.md for a diff touching only Go
+// files, because nothing compared a rule's declared scope against the
+// files under review.
+func TestRetrieveScopesRulesToChangedPaths(t *testing.T) {
+	ctx := context.Background()
+	storage := openTestStore(t)
+	repo, _ := domain.NewRepository("ws-1", "ai-memory", "/repos/ai-memory")
+	_ = storage.PutRepository(ctx, repo)
+	body := "Errors and promises must be handled, never dropped or floated."
+	putScopedRule(t, ctx, storage, repo.ID, "rules/ts-no-floating-promises.md", body, "**/*.ts, **/*.tsx")
+	putScopedRule(t, ctx, storage, repo.ID, "rules/go-wrap-errors.md", body, "go")
+	putScopedRule(t, ctx, storage, repo.ID, "rules/pr-single-purpose.md", body, "")
+
+	r := New(&search.Search{Storage: storage})
+	bundle, err := r.Retrieve(ctx, "errors promises handled dropped",
+		kernel.RetrieveOptions{ChangedPaths: []string{"internal/provider/claude/claude.go"}})
+	if err != nil {
+		t.Fatalf("Retrieve: %v", err)
+	}
+
+	got := rulePaths(bundle)
+	for _, p := range got {
+		if p == "rules/ts-no-floating-promises.md" {
+			t.Errorf("a TypeScript rule was returned for a Go-only change: %v", got)
+		}
+	}
+	var sawGo, sawUniversal bool
+	for _, p := range got {
+		sawGo = sawGo || p == "rules/go-wrap-errors.md"
+		sawUniversal = sawUniversal || p == "rules/pr-single-purpose.md"
+	}
+	if !sawGo {
+		t.Errorf("the Go rule was not returned for a Go change: %v", got)
+	}
+	if !sawUniversal {
+		t.Errorf("an unscoped rule must stay universal: %v", got)
+	}
+}
+
+// TestRetrieveWithoutPathsAppliesNoScoping pins the backward-compatible
+// path: `eng ask` supplies no changed paths and must behave as before.
+func TestRetrieveWithoutPathsAppliesNoScoping(t *testing.T) {
+	ctx := context.Background()
+	storage := openTestStore(t)
+	repo, _ := domain.NewRepository("ws-1", "ai-memory", "/repos/ai-memory")
+	_ = storage.PutRepository(ctx, repo)
+	body := "Errors and promises must be handled, never dropped or floated."
+	putScopedRule(t, ctx, storage, repo.ID, "rules/ts-no-floating-promises.md", body, "**/*.ts")
+
+	r := New(&search.Search{Storage: storage})
+	bundle, err := r.Retrieve(ctx, "errors promises handled dropped", kernel.RetrieveOptions{})
+	if err != nil {
+		t.Fatalf("Retrieve: %v", err)
+	}
+	if len(rulePaths(bundle)) != 1 {
+		t.Errorf("with no changed paths every rule should be returned, got %v", rulePaths(bundle))
+	}
+}
+
+// TestRetrieveReturnsNoRulesWhenNoneGovern covers RFC-0005's third
+// fallback: an empty Rules group is the honest answer, not a reason to
+// fall back to unfiltered results.
+func TestRetrieveReturnsNoRulesWhenNoneGovern(t *testing.T) {
+	ctx := context.Background()
+	storage := openTestStore(t)
+	repo, _ := domain.NewRepository("ws-1", "ai-memory", "/repos/ai-memory")
+	_ = storage.PutRepository(ctx, repo)
+	body := "Errors and promises must be handled, never dropped or floated."
+	putScopedRule(t, ctx, storage, repo.ID, "rules/ts-no-floating-promises.md", body, "**/*.ts")
+
+	r := New(&search.Search{Storage: storage})
+	bundle, err := r.Retrieve(ctx, "errors promises handled dropped",
+		kernel.RetrieveOptions{ChangedPaths: []string{"main.go"}})
+	if err != nil {
+		t.Fatalf("Retrieve: %v", err)
+	}
+	if got := rulePaths(bundle); len(got) != 0 {
+		t.Errorf("expected no rules to govern a Go change, got %v", got)
 	}
 }

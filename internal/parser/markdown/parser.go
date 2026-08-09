@@ -250,6 +250,15 @@ func inferDocType(p string, meta domain.Metadata) domain.DocType {
 		case "README":
 			return domain.DocTypeReadme
 		}
+		// An index page declares itself (`doc: rules-index`) and is
+		// documentation *about* a directory, not an instance of what the
+		// directory holds. Without this, scope-selected rule retrieval
+		// (RFC-0005) returns the rules index alongside the rules in every
+		// single review, since an index carries no applies_to and is
+		// therefore universal.
+		if strings.HasSuffix(strings.ToLower(doc), "-index") {
+			return domain.DocTypeReadme
+		}
 	}
 
 	// A document's directory outranks its file name. `rules/README.md`

@@ -290,3 +290,35 @@ func (s *Store) ListRelationships(ctx context.Context, documentID string) ([]dom
 	}
 	return out, rows.Err()
 }
+
+// ListDocumentsByType implements kernel.Storage: every document of one
+// Knowledge Type across every repository in the workspace. Backs
+// scope-selected rule retrieval (RFC-0005), where the question is "which
+// rules govern these files" rather than "which documents mention these
+// words" — the two have different answers, and only the second is a
+// search.
+func (s *Store) ListDocumentsByType(ctx context.Context, docType domain.DocType) ([]domain.CanonicalDocument, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+documentColumns+` FROM documents WHERE doc_type = ? ORDER BY path`, string(docType))
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: list documents by type %s: %w", docType, err)
+	}
+	defer rows.Close()
+
+	var out []domain.CanonicalDocument
+	for rows.Next() {
+		doc, err := scanDocument(rows)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: scan document: %w", err)
+		}
+		out = append(out, doc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if err := s.attach(ctx, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}

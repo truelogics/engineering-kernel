@@ -73,7 +73,7 @@ func Open(dir string) (*Memory, error) {
 		store:     store,
 		indexer:   idx,
 		search:    hybridSearch,
-		retriever: retriever.New(hybridSearch),
+		retriever: &retriever.Retriever{Search: hybridSearch, Storage: store},
 	}, nil
 }
 
@@ -192,7 +192,20 @@ func (m *Memory) repositoryNames(ctx context.Context) (map[string]string, error)
 // question ("how does authentication work?") or a broader description
 // ("Review authentication PR") — Retriever treats both the same way.
 func (m *Memory) Context(ctx context.Context, task string) (ContextPackage, error) {
-	bundle, err := m.retriever.Retrieve(ctx, task)
+	return m.ContextFor(ctx, task, ContextOptions{})
+}
+
+// ContextFor is Context with options — today, the paths a task concerns,
+// so the Rules section can be scoped to the rules that actually govern
+// them (RFC-0005). Without them a review of Go files can be handed a
+// TypeScript rule, which is what the first cross-repository retrieval
+// this kernel ever performed actually did.
+//
+// A separate method rather than a changed signature: adding one is not a
+// breaking change, so every existing caller keeps compiling and behaving
+// identically (KERNEL_POLICY.md Rule #2).
+func (m *Memory) ContextFor(ctx context.Context, task string, opts ContextOptions) (ContextPackage, error) {
+	bundle, err := m.retriever.Retrieve(ctx, task, kernel.RetrieveOptions{ChangedPaths: opts.ChangedPaths})
 	if err != nil {
 		return ContextPackage{}, fmt.Errorf("memory: %w", err)
 	}

@@ -64,6 +64,11 @@ type Storage interface {
 	GetDocument(ctx context.Context, id string) (domain.CanonicalDocument, error)
 	FindDocumentByPath(ctx context.Context, repositoryID, path string) (domain.CanonicalDocument, bool, error)
 	ListDocuments(ctx context.Context, repositoryID string) ([]domain.CanonicalDocument, error)
+	// ListDocumentsByType returns every document of one Knowledge Type
+	// across the whole workspace — the workspace, not one repository,
+	// because organization-wide rules live in a different repository from
+	// the code they govern (RFC-0005).
+	ListDocumentsByType(ctx context.Context, docType domain.DocType) ([]domain.CanonicalDocument, error)
 	// DeleteDocument removes a document and everything referencing it
 	// (chunks, FTS index, tags, relationships) as explicit application-layer
 	// deletes inside one transaction — not ON DELETE CASCADE (see
