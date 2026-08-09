@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/truelogics/ai-memory/internal/domain"
 	"github.com/truelogics/ai-memory/internal/graph"
@@ -61,6 +62,46 @@ type Search struct {
 }
 
 var _ kernel.Search = (*Search)(nil)
+
+// UserQuery turns raw human search text into an FTS5 query that cannot
+// be a syntax error.
+//
+// FTS5's query grammar treats several ordinary characters as operators:
+// `a-b` parses as a column filter, so searching for a hyphenated name
+// fails with "no such column". Real failure, found by a consumer
+// searching for this organization's own repository names
+// (engineering-mcp/KERNEL_REQUIREMENTS.md #1):
+//
+//	Search("engineering-mcp kernel policy")
+//	  → SQL logic error: no such column: mcp
+//
+// Each whitespace-separated term is wrapped as an FTS5 phrase, which
+// sidesteps query-syntax parsing entirely; the content tokenizer still
+// splits a quoted phrase the way it would a bareword, so matching for
+// ordinary words is unchanged. Terms are joined with spaces, preserving
+// FTS5's implicit AND — this fixes a crash, it does not retune search.
+//
+// Text with nothing searchable in it returns ok false. There is no FTS5
+// query meaning "match nothing", and an empty MATCH is itself a syntax
+// error — so the caller returns no results rather than the function
+// returning something that would reintroduce the failure it exists to
+// prevent.
+//
+// Callers passing a *constructed* FTS expression must not use this:
+// re-quoting `"a" OR "b"` would turn its operator into a search term.
+// The retriever builds its own expression and calls Search directly
+// (see retriever.keywords).
+func UserQuery(text string) (query string, ok bool) {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return "", false
+	}
+	quoted := make([]string, 0, len(fields))
+	for _, f := range fields {
+		quoted = append(quoted, `"`+strings.ReplaceAll(f, `"`, `""`)+`"`)
+	}
+	return strings.Join(quoted, " "), true
+}
 
 // New returns a Search backed by storage, with no graph or embedding
 // signal configured — equivalent to Step 7's keyword-only Search. Use the

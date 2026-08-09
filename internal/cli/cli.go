@@ -234,8 +234,14 @@ func Search(ctx context.Context, dir, query string, out io.Writer) error {
 	}
 	defer store.Close()
 
+	fts, ok := search.UserQuery(query)
+	if !ok {
+		fmt.Fprintln(out, "No matches.")
+		return nil
+	}
+
 	hybrid := &search.Search{Storage: store, Graph: graph.New(store)}
-	results, err := hybrid.Search(ctx, query, kernel.SearchOptions{Limit: 10})
+	results, err := hybrid.Search(ctx, fts, kernel.SearchOptions{Limit: 10})
 	if err != nil {
 		return fmt.Errorf("search: %w", err)
 	}

@@ -1,3 +1,8 @@
 /eng
-/*.db
-.eng/
+
+# Unanchored: an 839 KB workspace database reached a commit because
+# `/*.db` only matches the repository root and `.eng/` only matches that
+# exact name — a workspace renamed to `.eng.stale-<date>/` matched
+# neither.
+*.db
+.eng*/

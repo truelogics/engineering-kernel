@@ -142,7 +142,14 @@ func (m *Memory) Sync(ctx context.Context, repo Repository) (IndexResult, error)
 
 // Search runs a ranked, hybrid full-text query (see internal/search).
 func (m *Memory) Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error) {
-	results, err := m.search.Search(ctx, query, kernel.SearchOptions{
+	// query is whatever a human or a model typed, so it is escaped
+	// rather than handed to FTS5 as an expression: a hyphen in it is
+	// otherwise a syntax error, not a search.
+	fts, ok := search.UserQuery(query)
+	if !ok {
+		return nil, nil
+	}
+	results, err := m.search.Search(ctx, fts, kernel.SearchOptions{
 		RepositoryID: opts.RepositoryID,
 		Limit:        opts.Limit,
 	})
