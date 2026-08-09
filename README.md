@@ -46,15 +46,19 @@ agents can load on demand.
 
 ## Current status
 
-**Kernel MVP working.** `eng init`, `eng index`, `eng search`, and `eng
-status` run end-to-end against real markdown repos — filesystem
-collection, goldmark-based markdown parsing, SQLite storage with FTS5
-search, all wired through `internal/indexer`. No AI, no embeddings, no
-vector database (by design — see RFC-0001's non-goals). `eng add`, `eng
-ask`, and `eng doctor` are designed ([`CLI.md`](docs/cli/CLI.md)) but not
-implemented; `Retriever`/`Context Builder` exist only as interfaces. See
-[`SPRINT_2_REVIEW.md`](SPRINT_2_REVIEW.md) for the milestone-by-milestone
-breakdown, test coverage, and known gaps.
+**In daily use.** The whole pipeline runs end-to-end against real
+repositories — filesystem collection, goldmark markdown parsing, SQLite
+with FTS5, retrieval and context assembly, all wired through
+`internal/indexer`. Two consumers build on it: `ai-review` and
+`engineering-mcp`. No AI, no embeddings, no vector database, by design
+(RFC-0001's non-goals).
+
+The command surface is [`CLI.md`](docs/cli/CLI.md). `eng ask` and `eng
+doctor` ship; `eng add` was replaced by `eng workspace attach`. An
+earlier version of this paragraph described all three as designed but
+unimplemented, and stayed that way for several sprints after they
+weren't — which is why `CLI.md` is now written from the binary rather
+than from a plan.
 
 ## Roadmap
 

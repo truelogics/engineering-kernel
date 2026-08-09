@@ -2,6 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -288,5 +291,105 @@ func TestSilentPassesThroughOrdinaryErrors(t *testing.T) {
 	}
 	if !Silent(errSilent{os.ErrNotExist}) {
 		t.Error("a command that reported for itself should not be reported twice")
+	}
+}
+
+// TestReadOnlyCommandsResolveTheWorkspaceUpward is finding 1 of the
+// RFC-0008 review.
+//
+// config, review and doctor resolved upward; status, search and ask did
+// not. In the layout this project documents — a workspace root above
+// several repositories — that meant status failed from inside a
+// perfectly indexed repository, and its advice was `eng init`, which
+// creates a nested .eng/. Because resolution takes the nearest
+// workspace, every other command then silently switched to the new empty
+// one.
+func TestReadOnlyCommandsResolveTheWorkspaceUpward(t *testing.T) {
+	root := workspaceWith(t, map[string]map[string]string{
+		"app":       {"README.md": "---\ndoc: README\n---\n\n# App\n\nBilling writes invoices.\n"},
+		"knowledge": {"rules/r.md": ruleDoc},
+	})
+	app := filepath.Join(root, "app")
+
+	for name, run := range map[string]func(io.Writer) error{
+		"status": func(w io.Writer) error { return Status(context.Background(), app, w) },
+		"search": func(w io.Writer) error { return Search(context.Background(), app, "invoices", w) },
+		"ask":    func(w io.Writer) error { return Context(context.Background(), app, "invoices", w) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+			if err := run(&out); err != nil {
+				t.Fatalf("%s failed from inside an indexed repository: %v", name, err)
+			}
+		})
+	}
+}
+
+// TestWorkspaceErrorDoesNotRecommendNesting: when a workspace exists
+// above, "run `eng init` first" is the one instruction that makes things
+// worse.
+func TestWorkspaceErrorDoesNotRecommendNesting(t *testing.T) {
+	root := workspaceWith(t, map[string]map[string]string{
+		"app": {"README.md": "---\ndoc: README\n---\n\n# App\n"},
+	})
+	nested := filepath.Join(root, "app", "sub")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := openStore(nested, false)
+	if err == nil {
+		t.Fatal("want an error: there is no workspace at this exact path")
+	}
+	if strings.Contains(err.Error(), "eng init") {
+		t.Errorf("recommending `eng init` here creates a nested workspace that shadows %s: %v", root, err)
+	}
+	if !strings.Contains(err.Error(), root) {
+		t.Errorf("the error should name the workspace that does exist: %v", err)
+	}
+}
+
+// TestTaxonomyValidateDoesNotCreditFrontMatter is finding 3.
+//
+// applyTaxonomy only touches documents whose type is unknown, so a
+// document carrying `doc: RULE` was classified by its own front matter,
+// not by a pattern. Counting it as classified "by a pattern in this
+// file" reported a taxonomy that had decided nothing as working — and
+// hid that the file and the document disagree about what the directory
+// holds.
+func TestTaxonomyValidateDoesNotCreditFrontMatter(t *testing.T) {
+	root := workspaceWith(t, map[string]map[string]string{
+		"app": {"docs/guide.md": ruleDoc},
+	})
+	app := filepath.Join(root, "app")
+	writeFile(t, app, domain.TaxonomyFile, "taxonomy:\n  docs/**: Reference\n")
+
+	var out strings.Builder
+	if err := TaxonomyValidate(context.Background(), app, &out); err != nil {
+		t.Fatalf("TaxonomyValidate: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "0 classified consistently with this file") {
+		t.Errorf("front matter classified this document, not the taxonomy:\n%s", got)
+	}
+	if !strings.Contains(got, "contradict this file") {
+		t.Errorf("a pattern the document disagrees with must be surfaced:\n%s", got)
+	}
+	if strings.Contains(got, "Nothing left for this file to do") {
+		t.Errorf("a contradiction is not a clean bill of health:\n%s", got)
+	}
+}
+
+// TestSilentSurvivesWrappingAndKeepsTheChain is finding 5. errSilent
+// wrapped an error and implemented only Error(), so errors.Is stopped at
+// it — and both producers wrap exec.CommandContext, where a cancelled
+// context is exactly what a caller needs to distinguish.
+func TestSilentSurvivesWrappingAndKeepsTheChain(t *testing.T) {
+	wrapped := errSilent{context.Canceled}
+	if !errors.Is(wrapped, context.Canceled) {
+		t.Error("errSilent severed the error chain")
+	}
+	if !Silent(fmt.Errorf("eng: %w", wrapped)) {
+		t.Error("Silent must see through a wrapper added above it")
 	}
 }

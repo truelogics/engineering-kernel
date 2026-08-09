@@ -11,6 +11,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,12 +91,22 @@ type errSilent struct{ err error }
 func (e errSilent) Error() string { return e.err.Error() }
 func (e errSilent) Silent() bool  { return true }
 
+// Unwrap keeps errors.Is and errors.As working through this wrapper.
+// Both producers wrap exec.CommandContext, so a cancelled context
+// arrives here as context.Canceled and a caller must still be able to
+// see it — engineering:rules/go-wrap-errors.md asks for %w precisely so
+// wrapping does not sever the chain.
+func (e errSilent) Unwrap() error { return e.err }
+
 // Silent reports whether err was produced by a command that has already
 // printed its own diagnosis, so main can exit non-zero without printing a
 // second, less useful one.
+//
+// errors.As rather than a type assertion, so a wrapper added above this
+// one later does not silently turn the answer back to false.
 func Silent(err error) bool {
-	s, ok := err.(interface{ Silent() bool })
-	return ok && s.Silent()
+	var s interface{ Silent() bool }
+	return errors.As(err, &s) && s.Silent()
 }
 
 // Clean implements `eng clean`: removes the generated .eng/ directory.
@@ -342,38 +353,53 @@ func TaxonomyValidate(ctx context.Context, dir string, out io.Writer) error {
 		return nil
 	}
 
-	// Three populations, not two. A document already carrying a type was
-	// classified by front matter or by an earlier run of this same file,
-	// and counting it as "not claimed" made a taxonomy that had already
-	// done its whole job report nothing but zeros.
-	var classified, wouldClaim, unclassified int
-	var matched []string
+	// Only documents this file actually decided count as decided by it.
+	//
+	// A first version credited any already-classified document that also
+	// matched a pattern, which is wrong twice over: applyTaxonomy touches
+	// only `unknown` documents, so front matter had made that decision;
+	// and a pattern contradicted by front matter is not a success but a
+	// disagreement about what a directory holds. Reporting it as a clean
+	// bill of health is exactly the failure this command exists to catch.
+	var decided, wouldDecide, unclassified int
+	var contradicted []string
 	for _, doc := range docs {
-		if doc.Type != domain.DocTypeUnknown {
-			classified++
-			if _, ok := tax.TypeFor(doc.Path); ok {
-				matched = append(matched, doc.Path)
-			}
-			continue
+		declared, claims := tax.TypeFor(doc.Path)
+		switch {
+		case doc.Type == domain.DocTypeUnknown && claims:
+			wouldDecide++
+		case doc.Type == domain.DocTypeUnknown:
+			unclassified++
+		case claims && doc.Type == declared:
+			decided++ // consistent: front matter agrees, or this file set it
+		case claims:
+			contradicted = append(contradicted, fmt.Sprintf("%s is %s, this file calls it %s", doc.Path, doc.Type, declared))
 		}
-		if _, ok := tax.TypeFor(doc.Path); ok {
-			wouldClaim++
-			continue
-		}
-		unclassified++
 	}
 
 	fmt.Fprintf(out, "\nAgainst the index at %s — %d document(s) in this repository:\n", workspaceDir, len(docs))
-	fmt.Fprintf(out, "  %d already classified (%d of them by a pattern in this file)\n", classified, len(matched))
-	fmt.Fprintf(out, "  %d still unknown and claimed by this file — applied on the next `eng index`\n", wouldClaim)
+	fmt.Fprintf(out, "  %d classified consistently with this file\n", decided)
+	fmt.Fprintf(out, "  %d still unknown and claimed by this file — applied on the next `eng index`\n", wouldDecide)
 	fmt.Fprintf(out, "  %d still unknown and unclaimed\n", unclassified)
 
+	if len(contradicted) > 0 {
+		fmt.Fprintf(out, "\n%d document(s) contradict this file. Front matter wins, so these patterns\n", len(contradicted))
+		fmt.Fprintln(out, "have no effect on them — and the disagreement is worth resolving:")
+		for i, c := range contradicted {
+			if i == 5 {
+				fmt.Fprintf(out, "  ... and %d more\n", len(contradicted)-5)
+				break
+			}
+			fmt.Fprintf(out, "  %s\n", c)
+		}
+	}
+
 	switch {
-	case len(matched) == 0 && wouldClaim == 0 && unclassified > 0:
+	case decided == 0 && wouldDecide == 0 && len(contradicted) == 0 && unclassified > 0:
 		fmt.Fprintln(out, "\nThe file is valid and matches nothing, which is indistinguishable from not")
 		fmt.Fprintln(out, "having written one. Check the patterns against real paths — `**` crosses")
 		fmt.Fprintln(out, "directory separators and `*` does not.")
-	case unclassified == 0 && wouldClaim == 0:
+	case unclassified == 0 && wouldDecide == 0 && len(contradicted) == 0:
 		fmt.Fprintln(out, "\nEvery document here is classified. Nothing left for this file to do.")
 	case unclassified > 0:
 		fmt.Fprintf(out, "\n`eng status` in %s lists what is still unknown across the workspace.\n", workspaceDir)

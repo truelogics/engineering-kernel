@@ -47,10 +47,16 @@ func main() {
 	case "status":
 		err = cli.Status(ctx, firstArgOr(args, "."), os.Stdout)
 	case "clean":
+		// Flags pulled out by hand rather than by flag.Parse. Go's flag
+		// package stops at the first non-flag argument, so the documented
+		// spelling `eng clean . --yes` left --yes in Args() and the
+		// command told the user to re-run with the flag they had just
+		// passed. A path argument must not change what a flag means.
+		path, flags := splitFlags(args)
 		fs := flag.NewFlagSet("clean", flag.ExitOnError)
 		yes := fs.Bool("yes", false, "delete without asking")
-		fs.Parse(args)
-		err = cli.Clean(ctx, firstArgOr(fs.Args(), "."), os.Stdout, *yes)
+		fs.Parse(flags)
+		err = cli.Clean(ctx, firstArgOr(path, "."), os.Stdout, *yes)
 
 	// --- Knowledge --------------------------------------------------
 	case "search":
@@ -89,9 +95,10 @@ func main() {
 	case "config":
 		err = cli.Config(ctx, firstArgOr(args, "."), os.Stdout)
 	case "review":
+		_, flags := splitFlags(args)
 		fs := flag.NewFlagSet("review", flag.ExitOnError)
 		noLaunch := fs.Bool("no-launch", false, "print the instructions without starting Claude Code")
-		fs.Parse(args)
+		fs.Parse(flags)
 		err = cli.Review(ctx, ".", os.Stdout, !*noLaunch)
 
 	case "add":
@@ -111,6 +118,23 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// splitFlags separates positional arguments from flags, in any order.
+//
+// Go's flag package stops parsing at the first non-flag argument, which
+// makes `eng clean . --yes` and `eng clean --yes .` behave differently
+// for a reason no user can see. Ordering is not a thing anyone should
+// have to know about a CLI.
+func splitFlags(args []string) (positional, flags []string) {
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			continue
+		}
+		positional = append(positional, a)
+	}
+	return positional, flags
 }
 
 func firstArgOr(args []string, fallback string) string {
