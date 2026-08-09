@@ -90,3 +90,41 @@ func TestLoadTaxonomyFailsOnAMalformedFile(t *testing.T) {
 		t.Errorf("error should name the file: %v", err)
 	}
 }
+
+// TestReindexAppliesANewlyAddedTaxonomy is the blocking finding from the
+// first Validation Phase 1 review, as a test.
+//
+// Adding a .engineering.yaml changes no markdown file's bytes, so the
+// content-hash short-circuit reported every existing document Unchanged
+// and left it `unknown`. RFC-0007 therefore worked on a fresh index and
+// did nothing on the upgrade path every real adopter is on — which is
+// the only path that matters, since the repositories that need a
+// taxonomy are the ones already indexed without one.
+func TestReindexAppliesANewlyAddedTaxonomy(t *testing.T) {
+	stored := domain.CanonicalDocument{
+		Path:        "plans/to-do/decide.md",
+		Type:        domain.DocTypeUnknown,
+		ContentHash: "same",
+	}
+
+	// Same bytes, so the hash matches; the taxonomy is new.
+	fresh := domain.CanonicalDocument{
+		Path:        stored.Path,
+		Type:        domain.DocTypeUnknown,
+		ContentHash: "same",
+	}
+	tax, err := domain.ParseTaxonomy([]byte("taxonomy:\n  plans/**: Decision\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyTaxonomy(tax, &fresh)
+
+	unchanged := stored.ContentHash == fresh.ContentHash && stored.Type == fresh.Type
+	if unchanged {
+		t.Fatal("a document whose classification changed must not count as unchanged — " +
+			"skipping it here is what made adding a taxonomy a no-op on every already-indexed repository")
+	}
+	if fresh.Type != domain.DocTypeADR {
+		t.Errorf("Type = %q, want %q", fresh.Type, domain.DocTypeADR)
+	}
+}

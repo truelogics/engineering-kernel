@@ -22,7 +22,19 @@ func toIndexResult(r kernel.IndexResult) IndexResult {
 		Unchanged: r.Unchanged,
 		Deleted:   r.Deleted,
 		Errors:    r.Errors,
+		Failures:  toIndexFailures(r.Failures),
 	}
+}
+
+func toIndexFailures(in []kernel.IndexFailure) []IndexFailure {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]IndexFailure, len(in))
+	for i, f := range in {
+		out[i] = IndexFailure{Path: f.Path, Reason: f.Reason}
+	}
+	return out
 }
 
 // toContextPackage reshapes Retriever's labeled groups into

@@ -152,14 +152,25 @@ func Index(ctx context.Context, dir string, out io.Writer) error {
 	}
 
 	idx := newIndexer(store)
+	var failed []string
 	for _, repo := range repos {
 		result, err := idx.Index(ctx, repo)
 		if err != nil {
-			return fmt.Errorf("index %s: %w", repo.Name, err)
+			// One repository must not take the workspace down with it.
+			// A typo in a third-party repository's .engineering.yaml used
+			// to abort the whole run, and every repository after it in
+			// the list went stale with nothing on screen to say so.
+			fmt.Fprintf(out, "%s: FAILED — %v\n", repo.Name, err)
+			failed = append(failed, repo.Name)
+			continue
 		}
 		fmt.Fprintf(out, "%s: %d scanned, %d added, %d updated, %d unchanged, %d errors\n",
 			repo.Name, result.Scanned, result.Added, result.Updated, result.Unchanged, result.Errors)
 		printFailures(out, result.Failures)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("index: %d of %d repositories failed: %s",
+			len(failed), len(repos), strings.Join(failed, ", "))
 	}
 	return nil
 }

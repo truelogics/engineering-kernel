@@ -161,7 +161,14 @@ func (idx *Indexer) indexOne(ctx context.Context, repo domain.Repository, taxono
 		result.Fail(raw.Path, "lookup: "+err.Error())
 		return
 	}
-	if found && doc.ContentHash != "" && existing.ContentHash == doc.ContentHash {
+	// Unchanged means unchanged *as indexed*, not merely byte-identical.
+	// Classification is an input too: adding a .engineering.yaml to a
+	// repository changes no markdown file's bytes, so a content-hash-only
+	// check skipped every existing row and left it `unknown` — which made
+	// RFC-0007 work on a fresh index and do nothing on the upgrade path
+	// every real adopter is on. Found reviewing that change before it
+	// merged.
+	if found && doc.ContentHash != "" && existing.ContentHash == doc.ContentHash && existing.Type == doc.Type {
 		result.Unchanged++
 		return
 	}
