@@ -42,16 +42,45 @@ func dbPath(dir string) string {
 
 // openStore opens the workspace database for dir, requiring it to
 // already exist (i.e. `eng init` has run) unless create is true.
+//
+// The failure message deliberately does not say "run `eng init` first"
+// when a workspace exists above dir. Following that advice creates a
+// nested .eng/, and because resolution takes the *nearest* workspace,
+// every other command then silently switches to the new empty one — the
+// real workspace above becomes unreachable without anything saying so.
+// Found reviewing RFC-0008.
 func openStore(dir string, create bool) (*sqlite.Store, error) {
 	path := dbPath(dir)
 	if !create {
 		if _, err := os.Stat(path); err != nil {
+			if above, ok := findWorkspaceUpward(filepath.Dir(dir)); ok {
+				return nil, fmt.Errorf("no workspace at %s, but there is one at %s — run this there, or pass it as the path",
+					dir, above)
+			}
 			return nil, fmt.Errorf("no workspace at %s — run `eng init` first", dir)
 		}
 	} else if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create %s: %w", dbDirName, err)
 	}
 	return sqlite.Open(path)
+}
+
+// resolveWorkspace is what every read-only command uses to decide which
+// index answers for dir: the nearest workspace at or above it, matching
+// engineering-mcp's resolution so `eng` and a review never disagree about
+// which knowledge base is in play.
+//
+// Commands that *create* or *modify* a workspace deliberately do not use
+// it — `eng init .` must make a workspace here, not find one above.
+func resolveWorkspace(dir string) (string, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	if ws, ok := findWorkspaceUpward(absDir); ok {
+		return ws, nil
+	}
+	return absDir, nil
 }
 
 // gitRemote best-effort reads dir's `origin` remote; empty on any error.
@@ -254,7 +283,10 @@ func Sync(ctx context.Context, dir string, out io.Writer) error {
 
 // Search implements `eng search <query>`.
 func Search(ctx context.Context, dir, query string, out io.Writer) error {
-	absDir, err := filepath.Abs(dir)
+	// Resolved upward: the layout this project documents puts the
+	// workspace above several repositories, so reading only the current
+	// directory reports "no workspace here" from inside an indexed one.
+	absDir, err := resolveWorkspace(dir)
 	if err != nil {
 		return fmt.Errorf("search: %w", err)
 	}
@@ -303,7 +335,10 @@ func Search(ctx context.Context, dir, query string, out io.Writer) error {
 // "task" and a "question" are the same input shape as far as Retriever
 // is concerned (ARCHITECTURE.md's Retriever docs).
 func Context(ctx context.Context, dir, task string, out io.Writer) error {
-	absDir, err := filepath.Abs(dir)
+	// Resolved upward: the layout this project documents puts the
+	// workspace above several repositories, so reading only the current
+	// directory reports "no workspace here" from inside an indexed one.
+	absDir, err := resolveWorkspace(dir)
 	if err != nil {
 		return fmt.Errorf("context: %w", err)
 	}
@@ -330,7 +365,10 @@ func Context(ctx context.Context, dir, task string, out io.Writer) error {
 
 // Status implements `eng status [path]`.
 func Status(ctx context.Context, dir string, out io.Writer) error {
-	absDir, err := filepath.Abs(dir)
+	// Resolved upward: the layout this project documents puts the
+	// workspace above several repositories, so reading only the current
+	// directory reports "no workspace here" from inside an indexed one.
+	absDir, err := resolveWorkspace(dir)
 	if err != nil {
 		return fmt.Errorf("status: %w", err)
 	}
@@ -348,6 +386,14 @@ func Status(ctx context.Context, dir string, out io.Writer) error {
 	if len(repos) == 0 {
 		fmt.Fprintln(out, "No repositories registered. Run `eng index .` first.")
 		return nil
+	}
+
+	// The header states which workspace answered and whether it holds a
+	// rulebook, before any per-repository numbers. Both are things a
+	// developer reading a surprising review needs first: healthy counts
+	// from the wrong workspace look exactly like healthy counts.
+	if err := statusHeader(ctx, store, absDir, out); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(out, "%-20s %6s  %-19s  %s\n", "REPOSITORY", "DOCS", "LAST INDEXED", "STATUS")

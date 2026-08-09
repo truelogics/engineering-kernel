@@ -360,8 +360,13 @@ func TestSyncCoversTheWholeWorkspace(t *testing.T) {
 	if err := Status(ctx, root, &statusOut); err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if strings.Contains(statusOut.String(), filepath.Base(root)) {
-		t.Errorf("sync re-attached the workspace root, duplicating every document under one name:\n%s", statusOut.String())
+	// Row-wise, not whole-output: status names the workspace path in its
+	// header, which contains the root's own basename, so a substring
+	// check over the whole report reports a duplicate that is not there.
+	for _, line := range strings.Split(statusOut.String(), "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == filepath.Base(root) {
+			t.Errorf("sync re-attached the workspace root, duplicating every document under one name:\n%s", statusOut.String())
+		}
 	}
 }
 

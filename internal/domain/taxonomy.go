@@ -50,6 +50,11 @@ type Taxonomy struct {
 type taxonomyRule struct {
 	pattern string
 	docType DocType
+	// declared is the canonical name as the repository wrote it. Several
+	// canonical names collapse onto one DocType — Reference and Planning
+	// are stored as readme and roadmap — so showing a reader the DocType
+	// would show them a word they did not write and cannot look up.
+	declared string
 }
 
 // ParseTaxonomy reads a .engineering.yaml body.
@@ -91,13 +96,39 @@ func ParseTaxonomy(content []byte) (Taxonomy, error) {
 		if strings.TrimSpace(pattern) == "" {
 			return Taxonomy{}, fmt.Errorf("taxonomy: empty path pattern")
 		}
-		t.rules = append(t.rules, taxonomyRule{pattern: pattern, docType: docType})
+		t.rules = append(t.rules, taxonomyRule{pattern: pattern, docType: docType, declared: strings.TrimSpace(file.Taxonomy[pattern])})
 	}
 	return t, nil
 }
 
 // Empty reports whether the taxonomy says nothing.
 func (t Taxonomy) Empty() bool { return len(t.rules) == 0 }
+
+// Mapping is one declared pattern and the type it claims, in both the
+// vocabulary the repository wrote and the one the kernel stores.
+type Mapping struct {
+	Pattern string
+	// Declared is the canonical name from the file, e.g. "Reference".
+	Declared string
+	// Type is what it resolves to internally, e.g. DocTypeReadme.
+	Type DocType
+}
+
+// Mappings returns what the repository declared, most specific first —
+// the same order TypeFor consults, so a reader sees the order that
+// actually decides rather than the order the file was written in.
+//
+// Exists so a caller can display a taxonomy without reconstructing the
+// pattern-to-type relation from the outside. A second implementation of
+// that could disagree with the one indexing uses, and the disagreement
+// would surface as a command that explains the wrong thing.
+func (t Taxonomy) Mappings() []Mapping {
+	out := make([]Mapping, 0, len(t.rules))
+	for _, r := range t.rules {
+		out = append(out, Mapping{Pattern: r.pattern, Declared: r.declared, Type: r.docType})
+	}
+	return out
+}
 
 // TypeFor returns the canonical type a repository declares for path.
 //
