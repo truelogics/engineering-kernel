@@ -26,50 +26,47 @@ and conventions so AI systems can remember, enforce, and assist across sessions.
 
 ## Install
 
-Requires **Go 1.25+** and **git**. There are no prebuilt binaries.
+Requires **Go 1.25+** and **git**. There are no prebuilt binaries, and
+nothing to clone.
 
 ```bash
 go install github.com/truelogics/engineering-kernel/cmd/eng@latest
-export PATH="$(go env GOPATH)/bin:$PATH"   # in your shell profile
-eng version
+export PATH="$(go env GOPATH)/bin:$PATH"   # in your shell profile, not just this session
+
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
 ```
 
-That is the whole install for `eng`. Two commands — `eng doctor` and
-`eng review` — reach into the Claude Code integration, which lives in
-[`engineering-mcp`](../engineering-mcp/); build that too if you want them:
+Two commands. The second one creates the workspace, clones and indexes
+what you named, installs `engineering-mcp` if it is missing, registers
+it with Claude Code, and installs the `/review-branch` command. Then:
 
 ```bash
-git clone git@github.com:truelogics/engineering-mcp.git
-cd engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp
+cd ~/code/your-application
+eng doctor        # eight checks; the first ✘ is the cause, the rest are symptoms
+claude            # then type: /review-branch
 ```
 
-`engineering-mcp` cannot be `go install`ed from a module path today —
-see its [`INSTALL.md`](../engineering-mcp/INSTALL.md), which is the
-authoritative end-to-end setup including registering the server with
-Claude Code.
+`--rules` and `--repo` take a local path or a git URL and may be
+repeated. `eng setup` is re-runnable: run it again to add a repository,
+or after rebuilding, to repoint Claude Code at the new binary.
+
+**`--rules` is the one that matters.** It is whichever repository holds
+your organization's rules, ADRs and standards — for this organization,
+[`engineering`](../engineering/); for yours, perhaps a `docs` repo or a
+handbook. Without it everything works and has nothing to say: a workspace
+holding only your application answers every question about rules with a
+confident "no rule governs this", which reads exactly like a correct
+answer.
+
+The long version, with what each step produces and what goes wrong, is
+[`engineering-mcp/INSTALL.md`](../engineering-mcp/INSTALL.md).
 
 ## Use
 
-A **workspace** is one index over one or more repositories. The shape that
-works puts it in a directory *containing* the repositories you want
-searched together — your code **and** the repository holding your
-engineering rules:
-
-```bash
-cd ~/your-projects
-eng init .                                   # create the workspace
-eng workspace detach .                       # the root is a container, not a repo
-eng workspace attach ./your-application
-eng workspace attach ./your-rules-repo       # ← the important one
-eng workspace list
-```
-
-**Attach a rulebook.** A workspace holding only your application answers
-every question about rules with a confident "no rule governs this", which
-reads exactly like a correct answer. `eng status` reports the rule count
-for this reason, especially when it is zero.
-
-Then, in any repository you work in:
+A **workspace** is one index over one or more repositories — `eng setup`
+created one for you. In any repository you work in:
 
 ```bash
 eng taxonomy auto   # propose what this repository's directories mean, and ask
@@ -79,6 +76,13 @@ eng search "authentication"
 eng ask "how do we handle permission caching?"
 eng doctor          # check the whole machine, and say what to fix
 eng review          # check the setup, then hand over to Claude Code
+```
+
+To add a repository later, either re-run `eng setup` with another
+`--repo`, or attach it directly:
+
+```bash
+cd ~/engineering-os && eng workspace attach ~/code/another-application
 ```
 
 Every command, with what each is for and how it fails, is in

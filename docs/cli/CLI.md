@@ -31,11 +31,41 @@ delegates to. What follows is what the binary does.
 
 ## Getting started
 
+### `eng setup [path] --rules <repo> [--repo <repo>]`
+
+Everything between a machine with `eng` on it and a machine where
+`/review-branch` cites your organization's own decisions:
+
+```bash
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
+```
+
+Four steps, reported as it goes: create the workspace; clone, attach and
+index each named repository; install `engineering-mcp` if it is missing;
+hand over to `engineering-mcp install`, which registers the server with
+Claude Code and installs the `/review-branch` command.
+
+`--rules` and `--repo` each take a local path or a git URL, and may be
+repeated. They differ only in that setup warns when no `--rules` was
+given: a workspace with no rulebook answers every question about rules
+with a confident "none", and that is indistinguishable from a correct
+answer.
+
+**Re-runnable.** Run it again to add a repository, or after rebuilding,
+to repoint Claude Code at the new binary. One unreachable path is
+reported and the others still attach.
+
+This is orchestration and nothing else. What it contributes over typing
+the six commands yourself is the order, and one decision people got
+wrong by hand — see `eng init` below.
+
 ### `eng init [path]`
 
 Creates `.eng/memory.db` and registers the directory as a repository.
 `eng workspace create` is the same command under the workspace
-vocabulary.
+vocabulary. `eng setup` calls it for you.
 
 When the workspace root is a *parent* of several repositories — the
 layout that lets a review see both your code and your rulebook — detach
@@ -51,6 +81,11 @@ eng workspace attach ./your-rules-repo
 Left attached, every child repository's documents are indexed a second
 time under the root's name, and `repository:path` citations stop
 distinguishing them.
+
+`eng setup` makes that decision from the filesystem — a workspace root
+that is not itself a git repository is a container, and is detached —
+because the manual step was one whose reason nobody could see from where
+it was written, and it was skipped accordingly.
 
 ### `eng taxonomy`
 
@@ -123,6 +158,9 @@ Delegation rather than a second implementation: two sets of checks would
 drift, and then disagree about a machine neither could fix. When
 `engineering-mcp` is not installed, `eng` says so and reports the
 workspace facts it can establish alone.
+
+Most of what it reports as broken is fixed by `engineering-mcp install`,
+which `eng setup` runs — the checks name it where that is the answer.
 
 ### `eng review`
 
