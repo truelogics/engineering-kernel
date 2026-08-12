@@ -148,10 +148,75 @@ func TestAutoUpdateStillAsks(t *testing.T) {
 	if !strings.Contains(got, "Apply this taxonomy?") {
 		t.Errorf("--update must still ask:\n%s", got)
 	}
-	// The developer is approving a rewrite of their own file, so the
-	// change has to be visible without re-reading the whole thing.
-	if !strings.Contains(got, "Against your existing file") || !strings.Contains(got, "Guide → Planning") {
+	// The developer is approving a change to their own file, so the delta
+	// has to be visible without re-reading the whole thing.
+	if !strings.Contains(got, "Against your existing file") {
 		t.Errorf("--update should show what changes:\n%s", got)
+	}
+	// An update adds; it never rewrites a line its author wrote. Their
+	// `plans/**: Guide` disagrees with what this would infer, and it stays.
+	if strings.Contains(got, "Guide → Planning") || strings.Contains(got, "  removed:") {
+		t.Errorf("--update must not propose replacing the developer's own mapping:\n%s", got)
+	}
+	if !strings.Contains(got, "kept: 1 line(s) you already wrote") {
+		t.Errorf("--update should say what it is keeping:\n%s", got)
+	}
+}
+
+// TestUpdateNeverDiscardsAHandWrittenMapping, including under --yes.
+//
+// A decline writes nothing; a replacement destroys something. `--yes`
+// exists so an update can run unattended, which is exactly when nobody is
+// reading the warning that a line is about to disappear.
+func TestUpdateNeverDiscardsAHandWrittenMapping(t *testing.T) {
+	dir := repoWithLayout(t, messyRepo)
+	// A mapping no proposal would ever infer: `notes` is not in the name
+	// table, and its documents declare nothing.
+	writeFile(t, dir, "notes/a.md", "# a\n")
+	writeFile(t, dir, "notes/b.md", "# b\n")
+	writeFile(t, dir, domain.TaxonomyFile, "taxonomy:\n  notes/**: Reference\n")
+
+	var out strings.Builder
+	if err := TaxonomyAuto(context.Background(), dir, strings.NewReader(""), &out, true, true); err != nil {
+		t.Fatalf("TaxonomyAuto: %v", err)
+	}
+	after, err := os.ReadFile(taxonomyPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), "notes/**") {
+		t.Fatalf("--yes --update deleted a mapping the developer wrote:\n%s", after)
+	}
+	// And it still added what it did find.
+	if !strings.Contains(string(after), "handbook/**") {
+		t.Errorf("--update added nothing:\n%s", after)
+	}
+}
+
+// TestUpdateBaselineCountsWhatTheExistingFileAlreadyDoes.
+//
+// The impact heading says the numbers are measured rather than estimated.
+// Counting from the raw parse would credit this proposal for everything
+// the developer's current taxonomy already achieves — honest about the
+// mechanism and wrong about the delta, which is the one thing an update
+// exists to show.
+func TestUpdateBaselineCountsWhatTheExistingFileAlreadyDoes(t *testing.T) {
+	dir := repoWithLayout(t, messyRepo)
+	writeFile(t, dir, domain.TaxonomyFile, "taxonomy:\n  plans/**: Planning\n")
+
+	var out strings.Builder
+	if err := TaxonomyAuto(context.Background(), dir, strings.NewReader("n\n"), &out, true, false); err != nil {
+		t.Fatalf("TaxonomyAuto: %v", err)
+	}
+	got := out.String()
+	// messyRepo has 7 unclassified documents; the existing file already
+	// classifies the 2 under plans/, so the baseline is 5, not 7.
+	if !strings.Contains(got, "Unknown:       5 → 2") {
+		t.Errorf("the baseline must exclude what the existing file already classifies:\n%s", got)
+	}
+	if strings.Contains(got, "plans/**") && strings.Contains(got, "Proposed taxonomy") &&
+		strings.Contains(strings.SplitN(got, "Against your existing", 2)[0], "plans/**") {
+		t.Errorf("re-proposed a mapping the existing file already provides:\n%s", got)
 	}
 }
 

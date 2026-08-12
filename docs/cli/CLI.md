@@ -89,10 +89,18 @@ eng taxonomy auto --update     # propose changes to an existing file, and still 
 eng taxonomy auto --yes        # approve on the command line instead of at the prompt
 ```
 
-An existing `.engineering.yaml` is never replaced without `--update`, and
-`--update` still asks. A file that does not parse is never replaced at
-all — it is a statement the repository was trying to make, and
-overwriting it would destroy the evidence of the mistake along with it.
+An existing `.engineering.yaml` is never touched without `--update`, and
+`--update` **merges rather than replaces**: it adds what it has evidence
+for and never rewrites or removes a line you wrote. A proposal has
+evidence for what it can see and none for what it cannot, and treating
+"no evidence" as "delete this" would discard a decision you made on
+purpose. Under `--update` the impact baseline is what your existing file
+already achieves, so the numbers show the delta rather than crediting the
+proposal for your work.
+
+A file that does not parse is never replaced at all — it is a statement
+the repository was trying to make, and overwriting it would destroy the
+evidence of the mistake along with it.
 
 Front-matter precedence is unchanged (RFC-0007): a document's own `doc:`
 always wins over any mapping, and documents where the two disagree are
@@ -188,6 +196,10 @@ unknown.
 Parsing alone is a weak check. A taxonomy can be perfectly well-formed
 and match nothing, which is indistinguishable from not having written
 one.
+
+RFC-0007 originally placed inference out of scope. `ai-memory` RFC-0009
+amends that: the boundary is writing, not inferring, and an inference
+nobody has approved is a draft rather than the repository's statement.
 
 ### On proposing rather than deciding
 

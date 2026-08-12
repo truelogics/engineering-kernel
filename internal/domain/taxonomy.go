@@ -168,7 +168,15 @@ func (t Taxonomy) Mappings() []Mapping {
 // author learns one path syntax rather than two.
 func (t Taxonomy) TypeFor(path string) (DocType, bool) {
 	m, ok := t.MappingFor(path)
-	return m.Type, ok
+	if !ok {
+		// DocTypeUnknown, not the zero Mapping's empty string. Every
+		// current caller checks the boolean, so nothing was broken — but
+		// routing this through MappingFor silently narrowed a contract
+		// that used to be safe to ignore, and the next caller to ignore it
+		// would get "" where the package's own vocabulary says "unknown".
+		return DocTypeUnknown, false
+	}
+	return m.Type, true
 }
 
 // MappingFor returns the mapping that decides path — which pattern won,

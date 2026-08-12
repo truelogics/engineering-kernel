@@ -45,7 +45,7 @@ func TestEveryProposableNameIsCanonical(t *testing.T) {
 func TestProposalAlwaysParses(t *testing.T) {
 	p := Propose(docs(
 		"plans/a.md", unknown, "handbook/b.md", unknown, "specs/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if p.Empty() {
 		t.Fatal("expected a proposal")
 	}
@@ -63,7 +63,7 @@ func TestProposesFromDirectoryNames(t *testing.T) {
 		"plans/q1.md", unknown,
 		"handbook/oncall.md", unknown,
 		"docs/architecture/overview.md", unknown,
-	))
+	), domain.Taxonomy{})
 	got := strings.Join(patterns(p), " ")
 	for _, want := range []string{"plans/**=Planning", "handbook/**=Guide", "docs/architecture/**=Architecture"} {
 		if !strings.Contains(got, want) {
@@ -81,7 +81,7 @@ func TestLowConfidenceDirectoriesAreOmitted(t *testing.T) {
 		"weird-folder/thing.md", unknown,
 		"notes/random.md", unknown,
 		"misc/x.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if !p.Empty() {
 		t.Errorf("nothing here identifies itself; proposed %v", patterns(p))
 	}
@@ -101,7 +101,7 @@ func TestAmbiguousParentIsSkippedButSpecificChildIsNot(t *testing.T) {
 	p := Propose(docs(
 		"docs/architecture/a.md", unknown,
 		"docs/random-thoughts.md", unknown,
-	))
+	), domain.Taxonomy{})
 	got := strings.Join(patterns(p), " ")
 	if !strings.Contains(got, "docs/architecture/**=Architecture") {
 		t.Errorf("want the specific child proposed, got %v", got)
@@ -119,7 +119,7 @@ func TestFrontMatterMajorityIsEvidence(t *testing.T) {
 		"weird-folder/a.md", domain.DocTypeGuide,
 		"weird-folder/b.md", domain.DocTypeGuide,
 		"weird-folder/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if got := patterns(p); len(got) != 1 || got[0] != "weird-folder/**=Guide" {
 		t.Errorf("front matter should carry an unnamed directory, got %v", got)
 	}
@@ -133,7 +133,7 @@ func TestOneTypedDocumentIsNotAMajority(t *testing.T) {
 		"weird-folder/a.md", domain.DocTypeGuide,
 		"weird-folder/b.md", unknown,
 		"weird-folder/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if !p.Empty() {
 		t.Errorf("one document is not evidence about seven others: %v", patterns(p))
 	}
@@ -146,7 +146,7 @@ func TestNameAndFrontMatterConflictIsSkipped(t *testing.T) {
 		"handbook/a.md", domain.DocTypeADR,
 		"handbook/b.md", domain.DocTypeADR,
 		"handbook/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if !p.Empty() {
 		t.Errorf("a name/front-matter conflict must not be resolved by guessing: %v", patterns(p))
 	}
@@ -166,7 +166,7 @@ func TestDirectoriesTheParserAlreadyClassifiesAreNotProposedFor(t *testing.T) {
 		"rules/a.md", domain.DocTypeRule,
 		"rules/b.md", domain.DocTypeRule,
 		"plans/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if got := patterns(p); len(got) != 1 || got[0] != "plans/**=Planning" {
 		t.Errorf("only the directory with something to gain should be proposed for, got %v", got)
 	}
@@ -175,7 +175,7 @@ func TestDirectoriesTheParserAlreadyClassifiesAreNotProposedFor(t *testing.T) {
 // TestRedundantChildIsNotProposed: `plans/**` already covers
 // `plans/2026/**` with the same meaning.
 func TestRedundantChildIsNotProposed(t *testing.T) {
-	p := Propose(docs("plans/a.md", unknown, "plans/2026/b.md", unknown))
+	p := Propose(docs("plans/a.md", unknown, "plans/2026/b.md", unknown), domain.Taxonomy{})
 	if got := patterns(p); len(got) != 1 || got[0] != "plans/**=Planning" {
 		t.Errorf("want one covering mapping, got %v", got)
 	}
@@ -190,7 +190,7 @@ func TestImpactIsMeasuredNotEstimated(t *testing.T) {
 		"plans/a.md", unknown, "plans/b.md", unknown, "plans/c.md", unknown,
 		"handbook/d.md", unknown,
 		"weird/e.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if p.UnknownBefore != 5 {
 		t.Errorf("UnknownBefore = %d, want 5", p.UnknownBefore)
 	}
@@ -213,7 +213,7 @@ func TestFrontMatterOverridesAreReported(t *testing.T) {
 		"plans/a.md", unknown,
 		"plans/b.md", unknown,
 		"plans/decided.md", domain.DocTypeRule,
-	))
+	), domain.Taxonomy{})
 	if len(p.Overridden) != 1 || p.Overridden[0] != "plans/decided.md" {
 		t.Errorf("Overridden = %v, want [plans/decided.md]", p.Overridden)
 	}
@@ -233,9 +233,9 @@ func TestProposalIsDeterministic(t *testing.T) {
 		"docs/architecture/d.md", unknown, "weird/e.md", unknown,
 		"guides/f.md", unknown, "reference/g.md", unknown,
 	)
-	first := Propose(input).YAML()
+	first := Propose(input, domain.Taxonomy{}).YAML()
 	for i := 0; i < 20; i++ {
-		if got := Propose(input).YAML(); got != first {
+		if got := Propose(input, domain.Taxonomy{}).YAML(); got != first {
 			t.Fatalf("run %d differed:\n--- first ---\n%s\n--- got ---\n%s", i, first, got)
 		}
 	}
@@ -246,7 +246,7 @@ func TestProposalIsDeterministic(t *testing.T) {
 
 // TestNothingToProposeWhenEverythingIsClassified.
 func TestNothingToProposeWhenEverythingIsClassified(t *testing.T) {
-	p := Propose(docs("plans/a.md", domain.DocTypeRoadmap, "rules/b.md", domain.DocTypeRule))
+	p := Propose(docs("plans/a.md", domain.DocTypeRoadmap, "rules/b.md", domain.DocTypeRule), domain.Taxonomy{})
 	if !p.Empty() || p.YAML() != "" {
 		t.Errorf("nothing is unknown, so nothing is worth proposing: %v", patterns(p))
 	}
@@ -260,7 +260,7 @@ func TestUnnameableTypeIsNotProposed(t *testing.T) {
 		"proposals/a.md", domain.DocTypeRFC,
 		"proposals/b.md", domain.DocTypeRFC,
 		"proposals/c.md", unknown,
-	))
+	), domain.Taxonomy{})
 	if !p.Empty() {
 		t.Errorf("DocTypeRFC has no canonical name; proposed %v", patterns(p))
 	}
@@ -269,7 +269,7 @@ func TestUnnameableTypeIsNotProposed(t *testing.T) {
 // TestRootIsNeverProposedFor: a mapping of `**` would claim an entire
 // repository on the strength of whatever its most common directory held.
 func TestRootIsNeverProposedFor(t *testing.T) {
-	p := Propose(docs("a.md", unknown, "b.md", unknown, "c.md", unknown))
+	p := Propose(docs("a.md", unknown, "b.md", unknown, "c.md", unknown), domain.Taxonomy{})
 	for _, m := range p.Mappings {
 		if m.Pattern == "**" || m.Pattern == "./**" {
 			t.Errorf("proposed a repository-wide mapping: %+v", m)

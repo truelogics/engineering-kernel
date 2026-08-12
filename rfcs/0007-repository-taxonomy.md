@@ -154,8 +154,11 @@ regression in every consumer that groups by type.
 
 ## Out of scope
 
-- Inferring a taxonomy from repository structure. A guess presented as
-  the repository's own statement is worse than no statement.
+- Inferring a taxonomy from repository structure **and writing it**. A
+  guess presented as the repository's own statement is worse than no
+  statement. Inference offered as a *proposal*, which a person must
+  approve before it becomes the repository's statement, is permitted —
+  amended by [RFC-0009](0009-taxonomy-proposal.md).
 - Content-based classification. Reading a document to decide what it is
   is a different capability with different evidence behind it, and none
   has been gathered.

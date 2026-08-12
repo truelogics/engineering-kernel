@@ -111,7 +111,17 @@ type Skipped struct {
 
 // Proposal is a candidate taxonomy and its measured effect.
 type Proposal struct {
+	// Mappings are the new lines being proposed.
 	Mappings []Mapping
+	// Existing are the repository's own lines, carried through unchanged.
+	//
+	// An update merges rather than replaces. A proposal has evidence for
+	// what it can see and none for what it cannot, and treating "no
+	// evidence" as "delete this line" would discard a statement its author
+	// made deliberately — the same reasoning that makes EOF a no, with
+	// more at stake, because a decline writes nothing and a replacement
+	// destroys something.
+	Existing []domain.Mapping
 	Skipped  []Skipped
 	// Documents is how many documents were examined.
 	Documents int
@@ -131,7 +141,8 @@ type Proposal struct {
 	RootUnknown int
 }
 
-// Empty reports whether there is nothing to propose.
+// Empty reports whether there is nothing new to propose. An update that
+// finds nothing to add is empty even though the merged file would not be.
 func (p Proposal) Empty() bool { return len(p.Mappings) == 0 }
 
 // YAML renders the proposal as the .engineering.yaml it would write.
@@ -140,11 +151,12 @@ func (p Proposal) Empty() bool { return len(p.Mappings) == 0 }
 // byte the same file — a proposal that shuffled between runs could not
 // be reviewed in a diff.
 func (p Proposal) YAML() string {
-	if len(p.Mappings) == 0 {
+	lines := p.merged()
+	if len(lines) == 0 {
 		return ""
 	}
 	width := 0
-	for _, m := range p.Mappings {
+	for _, m := range lines {
 		if n := len(m.Pattern) + 1; n > width {
 			width = n
 		}
@@ -155,16 +167,53 @@ func (p Proposal) YAML() string {
 	b.WriteString("# Proposed by `eng taxonomy auto`; edit freely — this file is yours.\n")
 	b.WriteString("# A document's own `doc:` front matter always wins over these lines.\n")
 	b.WriteString("taxonomy:\n")
-	for _, m := range p.Mappings {
-		fmt.Fprintf(&b, "  %-*s %s\n", width, m.Pattern+":", m.Name)
+	for _, m := range lines {
+		fmt.Fprintf(&b, "  %-*s %s\n", width, m.Pattern+":", m.Declared)
 	}
 	return b.String()
 }
 
+// merged is the file that would be written: the repository's own lines
+// plus the new ones, sorted. A pattern the repository already declares
+// keeps its own wording — nothing here overrules a line its author wrote.
+func (p Proposal) merged() []domain.Mapping {
+	seen := map[string]bool{}
+	out := make([]domain.Mapping, 0, len(p.Existing)+len(p.Mappings))
+	for _, m := range p.Existing {
+		if seen[m.Pattern] {
+			continue
+		}
+		seen[m.Pattern] = true
+		out = append(out, m)
+	}
+	for _, m := range p.Mappings {
+		if seen[m.Pattern] {
+			continue
+		}
+		seen[m.Pattern] = true
+		out = append(out, domain.Mapping{Pattern: m.Pattern, Declared: m.Name, Type: m.Type})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Pattern < out[j].Pattern })
+	return out
+}
+
 // observation is one directory's evidence.
+//
+// docs is everything beneath dir, because a proposed pattern is `dir/**`
+// and that is what it would claim. direct is only the documents sitting
+// immediately in dir, because that is the only evidence about dir itself.
+//
+// The distinction is load-bearing. Reading front matter from the whole
+// subtree let `docs/`, whose name this deliberately treats as ambiguous,
+// inherit the declarations of `docs/architecture/` and then silently
+// classify `docs/product/` as Architecture — while printing
+// `docs/product/**` to the developer as considered and not proposed. The
+// report contradicted the file, in exactly the ambiguous-name case the
+// conservatism argument rests on. Found in review.
 type observation struct {
 	dir     string
 	docs    []domain.CanonicalDocument
+	direct  []domain.CanonicalDocument
 	unknown int
 }
 
@@ -175,24 +224,41 @@ type observation struct {
 // applied: Collector -> Parser -> Normalizer. Their Type is therefore
 // what front matter and the parser's own path rules established, which is
 // exactly the evidence a taxonomy is meant to supplement.
-func Propose(docs []domain.CanonicalDocument) Proposal {
-	p := Proposal{Documents: len(docs)}
-	for _, d := range docs {
+func Propose(docs []domain.CanonicalDocument, existing domain.Taxonomy) Proposal {
+	p := Proposal{Documents: len(docs), Existing: existing.Mappings()}
+
+	// The baseline is what the repository achieves *today*, which on an
+	// update includes its own taxonomy. Counting from the raw parse
+	// instead would credit this proposal for everything the developer's
+	// existing file already does, under a heading that says the number is
+	// measured — honest about the mechanism and wrong about the delta,
+	// which is the one thing an update exists to show.
+	effective := make([]domain.CanonicalDocument, len(docs))
+	copy(effective, docs)
+	if !existing.Empty() {
+		for i := range effective {
+			if effective[i].Type != domain.DocTypeUnknown {
+				continue
+			}
+			if t, ok := existing.TypeFor(effective[i].Path); ok {
+				effective[i].Type = t
+			}
+		}
+	}
+
+	for _, d := range effective {
 		if d.Type == domain.DocTypeUnknown {
 			p.UnknownBefore++
+			if path.Dir(d.Path) == "." {
+				p.RootUnknown++
+			}
 		}
 	}
 	if p.UnknownBefore == 0 {
 		return p
 	}
 
-	for _, d := range docs {
-		if d.Type == domain.DocTypeUnknown && path.Dir(d.Path) == "." {
-			p.RootUnknown++
-		}
-	}
-
-	byDir := groupByDirectory(docs)
+	byDir := groupByDirectory(effective)
 	claimed := map[string]string{} // dir -> proposed canonical name
 
 	for _, obs := range byDir {
@@ -234,7 +300,7 @@ func Propose(docs []domain.CanonicalDocument) Proposal {
 	sort.Slice(p.Mappings, func(i, j int) bool { return p.Mappings[i].Pattern < p.Mappings[j].Pattern })
 	sort.Slice(p.Skipped, func(i, j int) bool { return p.Skipped[i].Pattern < p.Skipped[j].Pattern })
 
-	measure(&p, docs)
+	measure(&p, docs, effective)
 	return p
 }
 
@@ -244,7 +310,7 @@ func Propose(docs []domain.CanonicalDocument) Proposal {
 // Nothing here estimates. A number a developer is asked to approve has to
 // be the number they will get, and the only way to be sure of that is to
 // run the real thing.
-func measure(p *Proposal, docs []domain.CanonicalDocument) {
+func measure(p *Proposal, docs, effective []domain.CanonicalDocument) {
 	tax, err := domain.ParseTaxonomy([]byte(p.YAML()))
 	if err != nil {
 		// The proposal does not parse, so it classifies nothing. Reported
@@ -255,15 +321,28 @@ func measure(p *Proposal, docs []domain.CanonicalDocument) {
 		return
 	}
 
-	classified := map[string]int{}
+	// effective for the counts: the baseline is what the repository
+	// achieves today, so a document its existing file already classifies
+	// is not something this proposal gets to claim.
+	classified := map[string]bool{}
+	for _, d := range effective {
+		if d.Type != domain.DocTypeUnknown {
+			continue
+		}
+		if _, claims := tax.TypeFor(d.Path); claims {
+			classified[d.Path] = true
+			continue
+		}
+		p.UnknownAfter++
+	}
+
+	// docs for the overrides: front-matter precedence is about what a
+	// document declares about itself, which no taxonomy changes.
 	for _, d := range docs {
-		declared, claims := tax.TypeFor(d.Path)
-		switch {
-		case d.Type == domain.DocTypeUnknown && claims:
-			classified[d.Path] = 1
-		case d.Type == domain.DocTypeUnknown:
-			p.UnknownAfter++
-		case claims && declared != d.Type:
+		if d.Type == domain.DocTypeUnknown {
+			continue
+		}
+		if declared, claims := tax.TypeFor(d.Path); claims && declared != d.Type {
 			p.Overridden = append(p.Overridden, d.Path)
 		}
 	}
@@ -285,7 +364,7 @@ func measure(p *Proposal, docs []domain.CanonicalDocument) {
 // identify decides what a directory holds, or says why it could not.
 func identify(obs observation) (name, evidence string, ok bool) {
 	nameGuess, nameOK := directoryNames[strings.ToLower(path.Base(obs.dir))]
-	fmGuess, typed, fmOK := frontMatterMajority(obs.docs)
+	fmGuess, typed, fmOK := frontMatterMajority(obs.direct)
 
 	switch {
 	case nameOK && fmOK && nameGuess == fmGuess:
@@ -361,9 +440,13 @@ func frontMatterMajority(docs []domain.CanonicalDocument) (name string, typed in
 // `dir/**`, which is recursive.
 func groupByDirectory(docs []domain.CanonicalDocument) []observation {
 	members := map[string][]domain.CanonicalDocument{}
+	direct := map[string][]domain.CanonicalDocument{}
 	for _, d := range docs {
 		for _, dir := range ancestors(d.Path) {
 			members[dir] = append(members[dir], d)
+		}
+		if parent := path.Dir(d.Path); parent != "." {
+			direct[parent] = append(direct[parent], d)
 		}
 	}
 
@@ -383,7 +466,7 @@ func groupByDirectory(docs []domain.CanonicalDocument) []observation {
 
 	out := make([]observation, 0, len(dirs))
 	for _, dir := range dirs {
-		obs := observation{dir: dir, docs: members[dir]}
+		obs := observation{dir: dir, docs: members[dir], direct: direct[dir]}
 		for _, d := range obs.docs {
 			if d.Type == domain.DocTypeUnknown {
 				obs.unknown++

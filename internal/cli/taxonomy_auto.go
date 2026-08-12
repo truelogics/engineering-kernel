@@ -47,7 +47,7 @@ func TaxonomyAuto(ctx context.Context, dir string, in io.Reader, out io.Writer, 
 		return nil
 	}
 
-	docs, err := readRepository(ctx, absDir)
+	docs, unreadable, err := readRepository(ctx, absDir)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,10 @@ func TaxonomyAuto(ctx context.Context, dir string, in io.Reader, out io.Writer, 
 		return nil
 	}
 
-	proposal := taxonomy.Propose(docs)
+	proposal := taxonomy.Propose(docs, existing)
+	if unreadable > 0 {
+		fmt.Fprintf(out, "%d document(s) could not be read and are not part of this proposal.\n\n", unreadable)
+	}
 	if !renderProposal(out, proposal, existing, hasExisting, absDir) {
 		return nil
 	}
@@ -188,34 +191,19 @@ func renderProposal(out io.Writer, p taxonomy.Proposal, existing domain.Taxonomy
 // developer approving a rewrite of a file they wrote needs to see the
 // delta rather than re-read the whole thing.
 func printDifference(out io.Writer, existing domain.Taxonomy, p taxonomy.Proposal) {
-	proposed := map[string]string{}
+	var added []string
 	for _, m := range p.Mappings {
-		proposed[m.Pattern] = m.Name
-	}
-	var added, changed, dropped []string
-	for _, m := range p.Mappings {
-		before, had := declaredFor(existing, m.Pattern)
-		switch {
-		case !had:
+		if _, had := declaredFor(existing, m.Pattern); !had {
 			added = append(added, m.Pattern+" → "+m.Name)
-		case !strings.EqualFold(before, m.Name):
-			changed = append(changed, fmt.Sprintf("%s: %s → %s", m.Pattern, before, m.Name))
-		}
-	}
-	for _, m := range existing.Mappings() {
-		if _, kept := proposed[m.Pattern]; !kept {
-			dropped = append(dropped, m.Pattern+" → "+m.Declared)
 		}
 	}
 
-	fmt.Fprintln(out, "\nAgainst your existing file:")
+	fmt.Fprintln(out, "\nAgainst your existing file — an update adds, it does not replace:")
 	printGroup(out, "added", added)
-	printGroup(out, "changed", changed)
-	printGroup(out, "removed", dropped)
-	if len(dropped) > 0 {
-		fmt.Fprintln(out, "\n  Removed lines are ones this proposal has no evidence for. That is not")
-		fmt.Fprintln(out, "  the same as them being wrong — you may know something it cannot see.")
-	}
+	fmt.Fprintf(out, "  kept: %d line(s) you already wrote, unchanged\n", len(existing.Mappings()))
+	fmt.Fprintln(out, "\n  Your lines are never rewritten or removed. This proposal has evidence")
+	fmt.Fprintln(out, "  for what it can see and none for what it cannot, and treating \"no")
+	fmt.Fprintln(out, "  evidence\" as \"delete this\" would discard a decision you made on purpose.")
 }
 
 func printGroup(out io.Writer, label string, lines []string) {
@@ -333,36 +321,40 @@ func writeTaxonomy(path, content string) error {
 // readRepository runs the real pipeline up to the point a taxonomy would
 // be applied, so the proposal reasons about the same documents, with the
 // same types, that indexing will.
-func readRepository(ctx context.Context, absDir string) ([]domain.CanonicalDocument, error) {
+func readRepository(ctx context.Context, absDir string) ([]domain.CanonicalDocument, int, error) {
 	repo, err := domain.NewRepository(defaultWorkspaceID, filepath.Base(absDir), absDir)
 	if err != nil {
-		return nil, fmt.Errorf("taxonomy auto: %w", err)
+		return nil, 0, fmt.Errorf("taxonomy auto: %w", err)
 	}
 
 	raws, err := fscollector.New().Collect(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("taxonomy auto: collect %s: %w", absDir, err)
+		return nil, 0, fmt.Errorf("taxonomy auto: collect %s: %w", absDir, err)
 	}
 
 	parser := mdparser.New()
 	norm := normalizer.New()
 	docs := make([]domain.CanonicalDocument, 0, len(raws))
+	unreadable := 0
 	for _, raw := range raws {
 		if !parser.CanParse(raw) {
 			continue
 		}
+		// One unreadable document must not stop a proposal about the other
+		// hundred — but it is counted and reported. This command goes out
+		// of its way to account for every document it saw, and a silent
+		// drop is the one hole in that: "Read 94 document(s)" with six
+		// missing reads as ninety-four.
 		doc, err := parser.Parse(ctx, raw)
 		if err != nil {
-			// One unreadable document must not stop a proposal about the
-			// other hundred. It is also not silently dropped: it stays out
-			// of the evidence, and the document count printed to the reader
-			// is the count that was actually read.
+			unreadable++
 			continue
 		}
 		if doc, err = norm.Normalize(ctx, doc); err != nil {
+			unreadable++
 			continue
 		}
 		docs = append(docs, doc)
 	}
-	return docs, nil
+	return docs, unreadable, nil
 }
