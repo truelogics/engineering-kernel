@@ -3,7 +3,7 @@ doc: README
 audience: [human, agent]
 status: living
 owner: ai-memory
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-12
 ---
 
 # AI Memory
@@ -21,16 +21,71 @@ coordinates; where a capability lives elsewhere, it delegates — `eng doctor`
 runs `engineering-mcp doctor`, `eng review` hands over to Claude Code. A
 developer should never need to know which repository answers a question.
 
-```bash
-eng init          # create a workspace here
-eng taxonomy auto # propose what this repository's directories mean, and ask
-eng index         # index every repository in the workspace
-eng doctor        # check this machine end to end
-eng review        # check the setup, then hand over to Claude Code
-```
-
 A persistent context layer for agents. It ingests engineering docs, decisions,
 and conventions so AI systems can remember, enforce, and assist across sessions.
+
+## Install
+
+Requires **Go 1.25+** and **git**. There are no prebuilt binaries.
+
+```bash
+go install github.com/truelogics/ai-memory/cmd/eng@latest
+export PATH="$(go env GOPATH)/bin:$PATH"   # in your shell profile
+eng version
+```
+
+That is the whole install for `eng`. Two commands — `eng doctor` and
+`eng review` — reach into the Claude Code integration, which lives in
+[`engineering-mcp`](../engineering-mcp/); build that too if you want them:
+
+```bash
+git clone git@github.com:truelogics/engineering-mcp.git
+cd engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp
+```
+
+`engineering-mcp` cannot be `go install`ed from a module path today —
+see its [`INSTALL.md`](../engineering-mcp/INSTALL.md), which is the
+authoritative end-to-end setup including registering the server with
+Claude Code.
+
+## Use
+
+A **workspace** is one index over one or more repositories. The shape that
+works puts it in a directory *containing* the repositories you want
+searched together — your code **and** the repository holding your
+engineering rules:
+
+```bash
+cd ~/your-projects
+eng init .                                   # create the workspace
+eng workspace detach .                       # the root is a container, not a repo
+eng workspace attach ./your-application
+eng workspace attach ./your-rules-repo       # ← the important one
+eng workspace list
+```
+
+**Attach a rulebook.** A workspace holding only your application answers
+every question about rules with a confident "no rule governs this", which
+reads exactly like a correct answer. `eng status` reports the rule count
+for this reason, especially when it is zero.
+
+Then, in any repository you work in:
+
+```bash
+eng taxonomy auto   # propose what this repository's directories mean, and ask
+eng update          # incremental re-index after documents change
+eng status          # what is indexed, and whether a rulebook is present
+eng search "authentication"
+eng ask "how do we handle permission caching?"
+eng doctor          # check the whole machine, and say what to fix
+eng review          # check the setup, then hand over to Claude Code
+```
+
+Every command, with what each is for and how it fails, is in
+[`docs/cli/CLI.md`](docs/cli/CLI.md). When something is wrong, run
+`eng doctor` first — it checks the binaries, the workspace, the index,
+retrieval, and the Claude Code side, and names the first thing that
+is broken.
 
 ## Why does it exist?
 
@@ -84,9 +139,9 @@ place to check what's next, not two that can drift out of sync.
 2. Significant design → open an RFC under `rfcs/` (start from `0000-template.md`)
 3. Org-wide decisions also land in [`engineering/ADR/`](../engineering/ADR/)
 
-Code dirs: `cmd/` and `internal/` are implemented (see
-[`internal/README.md`](internal/README.md) for the package map); `pkg/`
-and `tests/` stay reserved — see their own READMEs for why.
+Code dirs: `cmd/`, `internal/` and `pkg/` are implemented (see
+[`internal/README.md`](internal/README.md) for the package map);
+`tests/` stays reserved — see its README for why.
 
 ## Related repos
 
@@ -105,14 +160,14 @@ ai-memory/
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── go.mod
-├── rfcs/               ← design proposals (0001: Engineering Memory Kernel)
+├── rfcs/               ← design proposals (0001 kernel … 0009 taxonomy proposal)
 ├── docs/
 │   ├── architecture/   ← KNOWLEDGE_MODEL.md, ARCHITECTURE.md, DOMAIN_MODEL.md, DATABASE.md, INTERFACES.md, GRAPH.md
 │   ├── cli/            ← CLI.md
 │   └── api/ storage/ search/ sdk/ plugins/ examples/   ← reserved
 ├── cmd/eng/            ← the Engineering OS shell (RFC-0008)
 ├── internal/           ← implemented — see internal/README.md for the map
-├── pkg/                ← reserved — public libraries
+├── pkg/memory/         ← the public SDK (RFC-0004) — what consumers build on
 ├── examples/           ← reserved — runnable usage examples
 ├── scripts/            ← reserved — dev/build scripts
 └── tests/              ← reserved by choice — see tests/README.md
