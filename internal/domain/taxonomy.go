@@ -30,6 +30,38 @@ var canonicalTypes = map[string]DocType{
 	"other":         DocTypeUnknown,
 }
 
+// CanonicalType resolves a canonical type name, however cased, to the
+// Knowledge Type it means.
+//
+// Exported so that anything generating a taxonomy — a proposal, a
+// template, a test — validates its vocabulary against the same table
+// ParseTaxonomy uses, rather than carrying a second copy that can fall
+// out of step with it.
+func CanonicalType(name string) (DocType, bool) {
+	t, ok := canonicalTypes[strings.ToLower(strings.TrimSpace(name))]
+	return t, ok
+}
+
+// CanonicalNameFor is the inverse: the vocabulary word a repository
+// would write to declare docType.
+//
+// Not every DocType has one. The kernel infers DocTypeRFC from a path,
+// and the canonical set has no separate word for it — an RFC is a
+// Decision — so a caller proposing a mapping from observed types must
+// handle the false and propose nothing rather than invent a word the
+// parser would reject.
+func CanonicalNameFor(docType DocType) (string, bool) {
+	for _, name := range CanonicalTypeNames() {
+		if canonicalTypes[name] == docType {
+			// Title case: the canonical types are written capitalized
+			// everywhere they are documented, and ParseTaxonomy lowercases
+			// before matching, so this round-trips.
+			return strings.ToUpper(name[:1]) + name[1:], true
+		}
+	}
+	return "", false
+}
+
 // CanonicalTypeNames lists the accepted canonical types, sorted. Used to
 // tell an author what they may write when they write something else.
 func CanonicalTypeNames() []string {
@@ -135,10 +167,31 @@ func (t Taxonomy) Mappings() []Mapping {
 // Matching reuses RFC-0005's applies_to glob semantics, so a repository
 // author learns one path syntax rather than two.
 func (t Taxonomy) TypeFor(path string) (DocType, bool) {
+	m, ok := t.MappingFor(path)
+	if !ok {
+		// DocTypeUnknown, not the zero Mapping's empty string. Every
+		// current caller checks the boolean, so nothing was broken — but
+		// routing this through MappingFor silently narrowed a contract
+		// that used to be safe to ignore, and the next caller to ignore it
+		// would get "" where the package's own vocabulary says "unknown".
+		return DocTypeUnknown, false
+	}
+	return m.Type, true
+}
+
+// MappingFor returns the mapping that decides path — which pattern won,
+// not just what it decided.
+//
+// Two patterns can match one path, and a caller reporting what a taxonomy
+// achieves has to attribute each document to the line that actually
+// claimed it. Answering that here rather than in the caller keeps one
+// definition of "wins": the rules are consulted most-specific-first, and
+// the first match decides.
+func (t Taxonomy) MappingFor(path string) (Mapping, bool) {
 	for _, r := range t.rules {
 		if matchPath(r.pattern, path) {
-			return r.docType, true
+			return Mapping{Pattern: r.pattern, Declared: r.declared, Type: r.docType}, true
 		}
 	}
-	return DocTypeUnknown, false
+	return Mapping{}, false
 }

@@ -56,7 +56,55 @@ distinguishing them.
 
 Shows what this repository has declared its directories mean
 (`.engineering.yaml`, RFC-0007), or explains how to say so when it has
-not. Nothing is written for you — see `taxonomy suggest` below.
+not. It never writes anything.
+
+### `eng taxonomy auto`
+
+Proposes mappings from what the repository already contains, shows what
+they would do, and writes the file only if you say yes.
+
+**It proposes; you approve; the file is yours.** Nothing is written
+without an explicit `y`, and a closed stdin counts as no — a command that
+read EOF as approval would write the file in exactly the automated
+contexts where nobody is watching.
+
+Signals are deterministic and local: unambiguous directory names, and the
+`doc:` front matter of documents that already declare themselves. No
+model, no network, so the same repository state always yields the same
+file and a proposal can be reviewed in a diff.
+
+It is conservative on purpose. A directory called `docs/` or `notes/`
+gets no mapping unless its own documents say what it holds, because a
+wrong mapping returns confidently mislabelled documents, which is worse
+than leaving them unknown. Everything considered and passed over is
+listed, with the reason.
+
+The impact figures are measured, not estimated: the proposal is rendered
+to YAML, parsed by the same parser indexing uses, and applied with the
+same matcher. What it says will happen is what happens.
+
+```bash
+eng taxonomy auto              # propose, show, ask
+eng taxonomy auto --update     # propose changes to an existing file, and still ask
+eng taxonomy auto --yes        # approve on the command line instead of at the prompt
+```
+
+An existing `.engineering.yaml` is never touched without `--update`, and
+`--update` **merges rather than replaces**: it adds what it has evidence
+for and never rewrites or removes a line you wrote. A proposal has
+evidence for what it can see and none for what it cannot, and treating
+"no evidence" as "delete this" would discard a decision you made on
+purpose. Under `--update` the impact baseline is what your existing file
+already achieves, so the numbers show the delta rather than crediting the
+proposal for your work.
+
+A file that does not parse is never replaced at all — it is a statement
+the repository was trying to make, and overwriting it would destroy the
+evidence of the mistake along with it.
+
+Front-matter precedence is unchanged (RFC-0007): a document's own `doc:`
+always wins over any mapping, and documents where the two disagree are
+reported rather than quietly ignored.
 
 ### `eng index [path]`
 
@@ -149,14 +197,21 @@ Parsing alone is a weak check. A taxonomy can be perfectly well-formed
 and match nothing, which is indistinguishable from not having written
 one.
 
-### `eng taxonomy suggest`
+RFC-0007 originally placed inference out of scope. `ai-memory` RFC-0009
+amends that: the boundary is writing, not inferring, and an inference
+nobody has approved is a draft rather than the repository's statement.
 
-Deliberately not implemented. A taxonomy is a claim about what your
-directories mean, and an inference from directory names presented as a
-suggestion is how a wrong mapping gets accepted without anyone deciding
-it. `engineering/VALIDATION_PHASE_1.md` is explicit that mappings are
-never invented for a repository by someone who does not work in it, and
-that includes this tool.
+### On proposing rather than deciding
+
+`VALIDATION_PHASE_1.md` says mappings are never invented for a repository
+by someone who does not work in it. `auto` respects that by never being
+the one who decides: it assembles evidence, shows its reasoning, and
+stops. The approval is the decision, and it belongs to whoever owns the
+repository.
+
+That is also why a low-confidence directory is omitted rather than
+guessed at. A proposal you have to correct is worse than one that admits
+it does not know, because the correction only happens if you notice.
 
 ## Machine
 

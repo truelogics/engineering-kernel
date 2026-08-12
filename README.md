@@ -23,7 +23,7 @@ developer should never need to know which repository answers a question.
 
 ```bash
 eng init          # create a workspace here
-eng taxonomy      # what this repository's directories mean
+eng taxonomy auto # propose what this repository's directories mean, and ask
 eng index         # index every repository in the workspace
 eng doctor        # check this machine end to end
 eng review        # check the setup, then hand over to Claude Code
@@ -110,8 +110,7 @@ ai-memory/
 │   ├── architecture/   ← KNOWLEDGE_MODEL.md, ARCHITECTURE.md, DOMAIN_MODEL.md, DATABASE.md, INTERFACES.md, GRAPH.md
 │   ├── cli/            ← CLI.md
 │   └── api/ storage/ search/ sdk/ plugins/ examples/   ← reserved
-├── cmd/eng/            ← CLI entrypoint: init, index, search, status (real);
-│                          add, ask, doctor (not yet implemented)
+├── cmd/eng/            ← the Engineering OS shell (RFC-0008)
 ├── internal/           ← implemented — see internal/README.md for the map
 ├── pkg/                ← reserved — public libraries
 ├── examples/           ← reserved — runnable usage examples

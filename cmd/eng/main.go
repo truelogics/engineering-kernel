@@ -172,7 +172,7 @@ Usage:
 
 Getting started:
   init [path]              create a workspace here
-  taxonomy                 what this repository's directories mean, and how to say so
+  taxonomy auto            propose what this repository's directories mean, and ask
   index [path]             index every repository in the workspace
   doctor                   check this machine end to end, and say what to fix
   review                   check the setup, then hand over to Claude Code
@@ -193,6 +193,7 @@ Workspace — one index over one or more repositories:
 
 Meaning:
   taxonomy                 show the declared directory mappings
+  taxonomy auto            propose mappings from what this repository contains
   taxonomy validate        check them, and what they would classify
 
 Machine:
@@ -251,23 +252,28 @@ them from the workspace root.`)
 }
 
 func runTaxonomy(ctx context.Context, args []string) error {
-	if len(args) == 0 {
+	positional, flagArgs := splitFlags(args)
+	if len(positional) == 0 {
 		return cli.Taxonomy(ctx, ".", os.Stdout)
 	}
-	switch args[0] {
+	switch positional[0] {
 	case "validate":
 		return cli.TaxonomyValidate(ctx, ".", os.Stdout)
+	case "auto":
+		fs := flag.NewFlagSet("taxonomy auto", flag.ExitOnError)
+		update := fs.Bool("update", false, "propose an update to an existing taxonomy")
+		yes := fs.Bool("yes", false, "apply the proposal without the interactive prompt")
+		fs.Parse(flagArgs)
+		return cli.TaxonomyAuto(ctx, ".", os.Stdin, os.Stdout, *update, *yes)
 	case "suggest":
-		// Deliberately not implemented. Guessing what a repository's
-		// directories mean and presenting it as a suggestion is how a
-		// wrong mapping gets accepted without anyone deciding it —
-		// engineering:VALIDATION_PHASE_1.md is explicit that mappings are
-		// never invented for a repository by someone who does not work in
-		// it, and an inference from directory names is exactly that.
-		return fmt.Errorf("taxonomy suggest: not implemented, on purpose — a taxonomy is a claim about what your\n" +
-			"directories mean, and a guess presented as a suggestion gets accepted without being decided.\n" +
-			"Run `eng taxonomy` for the canonical types and write the mappings yourself")
+		// The name RFC-0008 used for what `auto` does. Aliased rather than
+		// refused: this used to error on the grounds that a guess presented
+		// as a suggestion gets accepted without being decided, and `auto`
+		// answers that objection by never deciding — it shows its evidence,
+		// omits what it cannot identify, and stops at the prompt.
+		fmt.Fprintln(os.Stderr, "eng taxonomy suggest: use `eng taxonomy auto`, which proposes and then asks.")
+		return runTaxonomy(ctx, append([]string{"auto"}, flagArgs...))
 	default:
-		return fmt.Errorf("eng taxonomy: unknown command %q — try `eng taxonomy` or `eng taxonomy validate`", args[0])
+		return fmt.Errorf("eng taxonomy: unknown command %q — try `eng taxonomy`, `eng taxonomy auto` or `eng taxonomy validate`", positional[0])
 	}
 }
