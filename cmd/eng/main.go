@@ -54,6 +54,17 @@ func main() {
 		printUsage(os.Stdout)
 		return
 
+	// --- Getting started --------------------------------------------
+	case "setup":
+		path, flags := splitFlags(args, "rules", "repo")
+		fs := flag.NewFlagSet("setup", flag.ExitOnError)
+		var opts cli.SetupOptions
+		fs.Var(repeatable{&opts.Rules}, "rules", "path or git URL of your rules/ADR repository (repeatable)")
+		fs.Var(repeatable{&opts.Repos}, "repo", "path or git URL of a repository to index (repeatable)")
+		fs.BoolVar(&opts.Force, "force", false, "overwrite an existing /review-branch command")
+		fs.Parse(flags)
+		err = cli.Setup(ctx, firstArgOr(path, "."), os.Stdout, opts)
+
 	// --- Repository -------------------------------------------------
 	case "init":
 		err = cli.Init(ctx, firstArgOr(args, "."), os.Stdout)
@@ -143,15 +154,55 @@ func main() {
 // makes `eng clean . --yes` and `eng clean --yes .` behave differently
 // for a reason no user can see. Ordering is not a thing anyone should
 // have to know about a CLI.
-func splitFlags(args []string) (positional, flags []string) {
-	for _, a := range args {
-		if strings.HasPrefix(a, "-") {
-			flags = append(flags, a)
+//
+// valueFlags names the flags that take a separate argument. Without it
+// every flag is assumed boolean, and `--rules ./engineering` is split
+// into a flag and a positional path — so `eng setup ~/os --rules
+// ./engineering` would create the workspace at ./engineering and attach
+// nothing, which is wrong in a way that looks like it worked.
+func splitFlags(args []string, valueFlags ...string) (positional, flags []string) {
+	takesValue := make(map[string]bool, len(valueFlags))
+	for _, f := range valueFlags {
+		takesValue[f] = true
+	}
+
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			positional = append(positional, a)
 			continue
 		}
-		positional = append(positional, a)
+		flags = append(flags, a)
+
+		// `--rules=x` carries its own value; `--rules x` claims the next
+		// argument. Only the second form can steal a positional.
+		name := strings.TrimLeft(a, "-")
+		inline := strings.ContainsRune(name, '=')
+		name, _, _ = strings.Cut(name, "=")
+		if !inline && takesValue[name] && i+1 < len(args) {
+			i++
+			flags = append(flags, args[i])
+		}
 	}
 	return positional, flags
+}
+
+// repeatable collects a flag given more than once, so `--rules a --rules
+// b` names two repositories rather than the second silently replacing
+// the first. A workspace is usually built from several repositories, and
+// a flag that keeps only the last one loses them without saying so.
+type repeatable struct{ into *[]string }
+
+func (r repeatable) String() string {
+	if r.into == nil {
+		return ""
+	}
+	return strings.Join(*r.into, ", ")
+}
+
+func (r repeatable) Set(v string) error {
+	*r.into = append(*r.into, v)
+	return nil
 }
 
 func firstArgOr(args []string, fallback string) string {
@@ -171,13 +222,21 @@ Usage:
   eng <command> [args]
 
 Getting started:
-  init [path]              create a workspace here
-  taxonomy auto            propose what this repository's directories mean, and ask
-  index [path]             index every repository in the workspace
+  setup [path] --rules <repo> [--repo <repo>]
+                           do all of it: workspace, index, MCP, Claude Code
   doctor                   check this machine end to end, and say what to fix
+  taxonomy auto            propose what this repository's directories mean, and ask
   review                   check the setup, then hand over to Claude Code
 
+  --rules and --repo take a local path or a git URL, and may be repeated.
+  Example:
+    eng setup ~/engineering-os \
+      --rules git@github.com:truelogics/engineering.git \
+      --repo ~/code/your-application
+
 Everyday:
+  init [path]              create a workspace here (setup does this for you)
+  index [path]             index every repository in the workspace
   update [path]            incremental re-index (alias: sync)
   status [path]            what is indexed, and whether a rulebook is present
   search <query>           ranked full-text search
