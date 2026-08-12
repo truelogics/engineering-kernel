@@ -2,7 +2,7 @@
 doc: ARCHITECTURE
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
@@ -194,7 +194,7 @@ above would change.
 - No component here calls out to a model or an embedding API — Search,
   Retriever, and Context Builder are pure functions over Storage's results.
 - No component assumes a single repo — `Workspace` (see DOMAIN_MODEL.md) can
-  span `ai-memory`, `engineering`, `roadmap`, `vision` from day one, even
+  span `engineering-kernel`, `engineering`, `roadmap`, `vision` from day one, even
   though v1 may only be exercised against one repo at a time.
 - No component is network-facing. `eng` is a local CLI against a local
   SQLite file.

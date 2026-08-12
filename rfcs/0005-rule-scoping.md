@@ -28,7 +28,7 @@ wrong answer.
 ## Motivation
 
 The evidence is one line from Sprint 7's first successful Category B
-run. Reviewing a change touching only Go files in `ai-review`, the
+run. Reviewing a change touching only Go files in `engineering-review`, the
 retrieved rule was:
 
 ```
@@ -45,7 +45,7 @@ under review. The rule's own front matter says exactly what it governs:
 applies_to: "**/*.ts, **/*.tsx"
 ```
 
-This is `ai-review/KERNEL_REQUIREMENTS.md` #6, which sat speculative for
+This is `engineering-review/KERNEL_REQUIREMENTS.md` #6, which sat speculative for
 four sprints and became measured the first time the surrounding machinery
 worked well enough to expose it.
 
@@ -56,12 +56,12 @@ who learns to skim the rules section is a reviewer for whom grounding has
 stopped working. The cost of getting this wrong is not a bad finding; it
 is the section quietly becoming ignorable.
 
-**Why this is a kernel capability and not an AI Review feature.**
+**Why this is a kernel capability and not an Engineering Review feature.**
 "Which rules govern these files?" is asked by every consumer that will
 ever exist — a review, an IDE showing rules for the open file, CI
 checking a changed path, an agent about to edit something. The matching
 logic, the shorthand, and the fallback behavior are identical for all of
-them. If AI Review implemented it, it would own the one piece of the
+them. If Engineering Review implemented it, it would own the one piece of the
 answer that nothing else could reuse (`engineering/CAPABILITIES.md`'s
 four-question test, and `KERNEL_POLICY.md` Rule #4).
 
@@ -124,7 +124,7 @@ hold, so here is the correction.
 
 Filtering removed the TypeScript rule and surfaced nothing in its place —
 the Rules group went from one wrong rule to zero rules. The reason is
-visible in the data. Reviewing a change to `ai-review`'s Claude provider
+visible in the data. Reviewing a change to `engineering-review`'s Claude provider
 and Markdown formatter, the task's vocabulary was:
 
 ```
@@ -221,7 +221,7 @@ becomes `ContextFor` with zero options.
 rule selection non-deterministic and unexplainable, and the declaration
 already exists. A rule that says what it governs should be believed.
 
-**Filter in the consumer.** AI Review has the changed paths and could
+**Filter in the consumer.** Engineering Review has the changed paths and could
 drop rules itself. Rejected on the four-question test: every consumer
 needs the same logic, and the one that implemented it would own the piece
 none of the others could reuse.
@@ -263,7 +263,7 @@ failure as the YAML rulebook that nothing could index.
    retriever implementation; `Retrieve(ctx, task)` behavior preserved for
    empty options.
 3. `Memory.ContextFor` on the public SDK.
-4. AI Review passes `diff.Paths()`.
+4. Engineering Review passes `diff.Paths()`.
 5. Re-run the Category B measurement: the same review that returned a
    TypeScript rule for a Go diff should return the Go rules that govern
    it, and no TypeScript ones.

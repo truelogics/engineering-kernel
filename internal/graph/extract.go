@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // referencesOnlyFromThisSide are the front-matter fields Extract resolves

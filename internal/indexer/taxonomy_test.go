@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func taxonomyRepo(t *testing.T, body string) domain.Repository {

@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // directoryNames maps an unambiguous directory name to the canonical type

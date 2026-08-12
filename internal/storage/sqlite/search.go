@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // SearchChunks implements kernel.Storage: a ranked FTS5 query, optionally

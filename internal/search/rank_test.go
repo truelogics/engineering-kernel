@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/graph"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/graph"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 func TestNormalize(t *testing.T) {

@@ -2,13 +2,13 @@
 doc: cmd
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
 # cmd/
 
-CLI entrypoints for AI Memory.
+CLI entrypoints for Engineering Kernel.
 
 > **Kernel MVP implemented.** `cmd/eng` wires `init`, `index`, `search`, and
 > `status` to real components (see [`internal/cli`](../internal/cli/)) —

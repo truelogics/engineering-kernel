@@ -2,13 +2,13 @@
 doc: RFC-index
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
 # RFCs
 
-Design proposals for AI Memory. Significant changes are discussed here before
+Design proposals for Engineering Kernel. Significant changes are discussed here before
 implementation.
 
 ## How to use

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // Normalizer reconciles a Parser's output into one guaranteed

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // PutChunks implements kernel.Storage. Replaces every chunk for

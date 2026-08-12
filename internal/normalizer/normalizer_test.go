@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func fixedClock(at time.Time) func() time.Time {

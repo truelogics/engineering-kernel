@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func TestTraverseRelationshipsBoundedByDepth(t *testing.T) {

@@ -2,7 +2,7 @@
 doc: CLI
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-10
 ---
 
@@ -197,7 +197,7 @@ Parsing alone is a weak check. A taxonomy can be perfectly well-formed
 and match nothing, which is indistinguishable from not having written
 one.
 
-RFC-0007 originally placed inference out of scope. `ai-memory` RFC-0009
+RFC-0007 originally placed inference out of scope. `engineering-kernel` RFC-0009
 amends that: the boundary is writing, not inferring, and an inference
 nobody has approved is a draft rather than the repository's statement.
 

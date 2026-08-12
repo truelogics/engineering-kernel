@@ -1,8 +1,8 @@
 package memory
 
 import (
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 func toRepository(r domain.Repository) Repository {

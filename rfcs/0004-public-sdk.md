@@ -13,11 +13,11 @@ resulting_adr:
 
 ## Summary
 
-AI Memory Sprint 3, scoped to exactly the three gaps `ai-review/KERNEL_REQUIREMENTS.md`
+Engineering Kernel Sprint 3, scoped to exactly the three gaps `engineering-review/KERNEL_REQUIREMENTS.md`
 marked as blocking any consumer from existing at all: a public Go API
 (`pkg/memory`), a structured context contract (`ContextPackage`, replacing
 `AssembledContext`'s flat text for programmatic consumers), and a public
-`Workspace`/`Repository` API. Everything else `ai-review` found (path-glob
+`Workspace`/`Repository` API. Everything else `engineering-review` found (path-glob
 rule scoping, PR ingestion, ownership, API versioning, ...) stays
 explicitly out of scope — this RFC is P0 only, per the CTO review's own
 classification.
@@ -28,9 +28,9 @@ Every package this kernel needs to expose
 (`internal/kernel`, `internal/search`, `internal/retriever`,
 `internal/contextbuilder`, `internal/indexer`) lives under `internal/`.
 Go's own compiler enforces that nothing outside this module — including
-`ai-review`, sitting right next to it — can import any of it. This
+`engineering-review`, sitting right next to it — can import any of it. This
 isn't a style preference to fix eventually; it's the literal reason
-`ai-review` could not contain a single line of Go code today, discovered
+`engineering-review` could not contain a single line of Go code today, discovered
 by trying to design one instead of guessing it might matter.
 
 ## Proposal
@@ -111,7 +111,7 @@ deliberately not included.** Not an oversight — a boundary worth stating
 explicitly:
 
 - `SimilarCode` would require indexing and searching actual source code.
-  AI Memory has only ever parsed markdown (RFC-0001's non-goals, still
+  Engineering Kernel has only ever parsed markdown (RFC-0001's non-goals, still
   true) — there is no code index to search. Adding an always-empty
   `SimilarCode` field would blur "not implemented" with "checked, found
   none," which this project has consistently avoided (see
@@ -119,8 +119,8 @@ explicitly:
   ingestion doesn't exist *yet*, a real future capability; `SimilarCode`
   would be empty because this kernel has never had a reason to parse code
   at all — a materially different kind of gap, deserving its own RFC if
-  and when `ai-review` actually needs it).
-- `Risks` is a reasoning output (an LLM's job, per `ai-review/ARCHITECTURE.md`'s
+  and when `engineering-review` actually needs it).
+- `Risks` is a reasoning output (an LLM's job, per `engineering-review/ARCHITECTURE.md`'s
   own Prompt Builder/LLM split), not a retrieval output. Putting it on
   `ContextPackage` would mean either faking it or quietly calling a model
   from inside what's supposed to be a deterministic, local retrieval call
@@ -128,7 +128,7 @@ explicitly:
   eventual AI layer.
 
 `RelevantFiles` folds `Retriever`'s Architecture/Documentation/RFCs/Roadmap/
-Other groups together — `ai-review`'s design doesn't (yet) need those
+Other groups together — `engineering-review`'s design doesn't (yet) need those
 distinguished from each other the way ADRs and Rules specifically are.
 
 ## Alternatives considered
@@ -136,9 +136,9 @@ distinguished from each other the way ADRs and Rules specifically are.
 - **Promote `internal/kernel` types directly to `pkg/`.** Rejected: every
   kernel type has changed at least once per milestone since Step 7; making
   them public directly makes every future kernel change a potential
-  breaking change for `ai-review` (and anything after it), for no benefit
+  breaking change for `engineering-review` (and anything after it), for no benefit
   over a thin conversion layer.
-- **Skip the facade, let `ai-review` import individual `internal/`
+- **Skip the facade, let `engineering-review` import individual `internal/`
   packages via a `replace` directive hack or by vendoring.** Rejected —
   this is exactly the workaround that makes "internal" meaningless and
   defeats the entire reason Go's visibility rule exists.
@@ -149,13 +149,13 @@ distinguished from each other the way ADRs and Rules specifically are.
 ## Trade-offs & risks
 
 - **`pkg/memory` becomes an immediate compatibility commitment.** The
-  moment `ai-review` (or the refactored `internal/cli`) depends on it,
+  moment `engineering-review` (or the refactored `internal/cli`) depends on it,
   changing its shape is a breaking change. Keeping it deliberately narrow
   (five methods, four types) is the mitigation — the smaller the surface,
   the cheaper it is to keep stable.
 - **`ContextPackage`'s flattening loses some structure `RetrievalBundle`
   has** (e.g. which specific Knowledge Type a "relevant file" came from,
-  beyond ADR/Rule). Acceptable for now — `ai-review`'s design doesn't ask
+  beyond ADR/Rule). Acceptable for now — `engineering-review`'s design doesn't ask
   for that distinction; it can be added later without breaking existing
   fields if it turns out to matter.
 
@@ -173,7 +173,7 @@ distinguished from each other the way ADRs and Rules specifically are.
    `Context`/`Close`/`AddRepository`, nothing else, per the CTO review's
    explicit instruction to keep the public surface's documentation as
    narrow as the surface itself.
-5. Stop. Per the CTO review: no further kernel work until `ai-review`'s
+5. Stop. Per the CTO review: no further kernel work until `engineering-review`'s
    actual implementation exercises this surface and finds the next real
    gap.
 
@@ -199,9 +199,9 @@ RFC.
   that distinction?
 - `Search.Weights`/`Retriever.Priority` (Milestone 7) aren't exposed
   through `pkg/memory.SearchOptions` in this pass — should tuning ranking
-  be part of the public API, or stay an internal concern `ai-review`
-  never needs to touch? Left unresolved; add if `ai-review` asks for it.
+  be part of the public API, or stay an internal concern `engineering-review`
+  never needs to touch? Left unresolved; add if `engineering-review` asks for it.
 - `pkg/memory` has no version tag or compatibility policy yet (gap #11 in
-  `ai-review/KERNEL_REQUIREMENTS.md`) — deliberately deferred past this
+  `engineering-review/KERNEL_REQUIREMENTS.md`) — deliberately deferred past this
   RFC, since it matters more once there's a second consumer than while
   there's a facade with zero external dependents.

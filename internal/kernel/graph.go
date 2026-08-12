@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // Reference is an unresolved cross-document pointer found in a

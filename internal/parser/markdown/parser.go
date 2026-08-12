@@ -18,8 +18,8 @@ import (
 	"github.com/yuin/goldmark/text"
 	"gopkg.in/yaml.v3"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // Parser converts markdown RawDocuments into CanonicalDocuments: it

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // workspaceWith builds a workspace root holding named repositories, the

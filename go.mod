@@ -1,4 +1,4 @@
-module github.com/truelogics/ai-memory
+module github.com/truelogics/engineering-kernel
 
 go 1.25.0
 

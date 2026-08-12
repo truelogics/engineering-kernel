@@ -2,13 +2,13 @@
 doc: data-model
 audience: [human, agent]
 status: draft
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-07-30
 ---
 
 # Data model
 
-Core entities AI Memory stores and how they relate.
+Core entities Engineering Kernel stores and how they relate.
 
 > **Status:** superseded by [`DATABASE.md`](DATABASE.md), the finalized v1
 > schema per [RFC-0001](../../rfcs/0001-engineering-memory-kernel.md). Kept

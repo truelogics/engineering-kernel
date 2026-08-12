@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // SearchResult is one ranked hit — what `eng search` prints a row for.

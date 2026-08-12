@@ -2,13 +2,13 @@
 doc: examples-index
 audience: [human, agent]
 status: placeholder
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-07-30
 ---
 
 # Examples
 
-Usage examples for AI Memory — ingest, query, and agent integration.
+Usage examples for Engineering Kernel — ingest, query, and agent integration.
 
 > **Status:** reserved — add examples when implementation lands.
 

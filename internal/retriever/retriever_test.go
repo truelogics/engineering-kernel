@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
-	"github.com/truelogics/ai-memory/internal/search"
-	"github.com/truelogics/ai-memory/internal/storage/sqlite"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/search"
+	"github.com/truelogics/engineering-kernel/internal/storage/sqlite"
 )
 
 func openTestStore(t *testing.T) kernel.Storage {

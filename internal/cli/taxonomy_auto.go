@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	fscollector "github.com/truelogics/ai-memory/internal/collector/filesystem"
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/normalizer"
-	mdparser "github.com/truelogics/ai-memory/internal/parser/markdown"
-	"github.com/truelogics/ai-memory/internal/taxonomy"
+	fscollector "github.com/truelogics/engineering-kernel/internal/collector/filesystem"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/normalizer"
+	mdparser "github.com/truelogics/engineering-kernel/internal/parser/markdown"
+	"github.com/truelogics/engineering-kernel/internal/taxonomy"
 )
 
 // TaxonomyAuto implements `eng taxonomy auto`: propose a taxonomy from

@@ -2,14 +2,14 @@
 doc: GO_SDK
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
 # Go SDK — `pkg/memory`
 
 > Companion to [RFC-0004](../../rfcs/0004-public-sdk.md). This is the only
-> supported way for code outside this module to use AI Memory. Everything
+> supported way for code outside this module to use Engineering Kernel. Everything
 > under `internal/` — `Collector`, `Parser`, `Chunker`, `Indexer`,
 > `Search`, `Retriever`, `Storage` — is off limits to importers; Go's
 > compiler enforces it, and this package is the boundary it enforces it
@@ -17,17 +17,17 @@ last_reviewed: 2026-08-02
 
 ## Why this exists
 
-`ai-review` — the first real consumer built against this kernel — could
+`engineering-review` — the first real consumer built against this kernel — could
 not contain a single line of Go code, because every package it needed
 lived under `internal/`. That's the whole reason `pkg/memory` exists: not
 a style preference, a blocking bug found by trying to build a consumer
 instead of guessing what one would need. See
-`ai-review/KERNEL_REQUIREMENTS.md` gaps #1–#3.
+`engineering-review/KERNEL_REQUIREMENTS.md` gaps #1–#3.
 
 ## Install
 
 ```
-go get github.com/truelogics/ai-memory/pkg/memory
+go get github.com/truelogics/engineering-kernel/pkg/memory
 ```
 
 ## The five operations

@@ -2,7 +2,7 @@
 doc: CONTRIBUTING
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 

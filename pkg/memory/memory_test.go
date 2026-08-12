@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {

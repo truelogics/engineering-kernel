@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 var errEmbeddingCountMismatch = errors.New("search: embedding provider returned a different number of vectors than texts submitted")

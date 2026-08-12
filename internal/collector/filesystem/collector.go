@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // Collector walks a Repository's LocalPath and reads every file worth

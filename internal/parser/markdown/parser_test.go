@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func tagValue(t *testing.T, tags []domain.Tag, key string) (string, bool) {

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 const documentColumns = `id, repository_id, path, doc_type, title, front_matter, body, content_hash, git_author, git_updated_at, indexed_at`

@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/chunker"
-	fscollector "github.com/truelogics/ai-memory/internal/collector/filesystem"
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/graph"
-	"github.com/truelogics/ai-memory/internal/indexer"
-	"github.com/truelogics/ai-memory/internal/kernel"
-	"github.com/truelogics/ai-memory/internal/normalizer"
-	mdparser "github.com/truelogics/ai-memory/internal/parser/markdown"
-	"github.com/truelogics/ai-memory/internal/retriever"
-	"github.com/truelogics/ai-memory/internal/search"
-	"github.com/truelogics/ai-memory/internal/storage/sqlite"
+	"github.com/truelogics/engineering-kernel/internal/chunker"
+	fscollector "github.com/truelogics/engineering-kernel/internal/collector/filesystem"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/graph"
+	"github.com/truelogics/engineering-kernel/internal/indexer"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/normalizer"
+	mdparser "github.com/truelogics/engineering-kernel/internal/parser/markdown"
+	"github.com/truelogics/engineering-kernel/internal/retriever"
+	"github.com/truelogics/engineering-kernel/internal/search"
+	"github.com/truelogics/engineering-kernel/internal/storage/sqlite"
 )
 
 const (

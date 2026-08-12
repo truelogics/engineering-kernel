@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func testDoc(t *testing.T, content string) domain.CanonicalDocument {

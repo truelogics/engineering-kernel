@@ -2,11 +2,11 @@
 doc: README
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-12
 ---
 
-# AI Memory
+# Engineering Kernel
 
 ## What is this?
 
@@ -29,7 +29,7 @@ and conventions so AI systems can remember, enforce, and assist across sessions.
 Requires **Go 1.25+** and **git**. There are no prebuilt binaries.
 
 ```bash
-go install github.com/truelogics/ai-memory/cmd/eng@latest
+go install github.com/truelogics/engineering-kernel/cmd/eng@latest
 export PATH="$(go env GOPATH)/bin:$PATH"   # in your shell profile
 eng version
 ```
@@ -90,7 +90,7 @@ is broken.
 ## Why does it exist?
 
 Agents start fresh every session. Knowledge lives in scattered docs and people's
-heads. AI Memory turns `engineering/` (and related repos) into queryable memory
+heads. Engineering Kernel turns `engineering/` (and related repos) into queryable memory
 agents can load on demand.
 
 ## Who is it for?
@@ -104,7 +104,7 @@ agents can load on demand.
 **In daily use.** The whole pipeline runs end-to-end against real
 repositories — filesystem collection, goldmark markdown parsing, SQLite
 with FTS5, retrieval and context assembly, all wired through
-`internal/indexer`. Two consumers build on it: `ai-review` and
+`internal/indexer`. Two consumers build on it: `engineering-review` and
 `engineering-mcp`. No AI, no embeddings, no vector database, by design
 (RFC-0001's non-goals).
 
@@ -154,7 +154,7 @@ Code dirs: `cmd/`, `internal/` and `pkg/` are implemented (see
 ## Map
 
 ```
-ai-memory/
+engineering-kernel/
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md

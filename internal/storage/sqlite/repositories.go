@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 const repositoryColumns = `id, workspace_id, name, remote_url, local_path, last_indexed_commit, last_indexed_at`

@@ -15,7 +15,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/cli"
+	"github.com/truelogics/engineering-kernel/internal/cli"
 )
 
 // version is read from the build rather than hard-coded. The constant

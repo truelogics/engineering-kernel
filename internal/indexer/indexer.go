@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/graph"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/graph"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // Indexer implements kernel.Indexer.

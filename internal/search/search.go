@@ -14,9 +14,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/graph"
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/graph"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // maxRelated caps how many related documents Search attaches per result,

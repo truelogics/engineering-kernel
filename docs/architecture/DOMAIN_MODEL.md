@@ -2,7 +2,7 @@
 doc: DOMAIN_MODEL
 audience: [human, agent]
 status: draft
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-01
 ---
 
@@ -21,7 +21,7 @@ last_reviewed: 2026-08-01
 ### Workspace
 
 The scope of one Engineering Memory index — one or more Repositories indexed
-together (e.g. `ai-memory` + `engineering` + `roadmap` + `vision` as a single
+together (e.g. `engineering-kernel` + `engineering` + `roadmap` + `vision` as a single
 workspace). `eng init` creates one.
 
 ### Repository
@@ -47,7 +47,7 @@ edits.
 A machine-checkable directive: severity, glob pattern it applies to, and the
 imperative sentence itself. Usually extracted from a Document in
 `engineering/rules/` or an inline `rules` block. v1 parses and stores rules;
-it does not enforce them (enforcement is a consumer's job, e.g. AI Review —
+it does not enforce them (enforcement is a consumer's job, e.g. Engineering Review —
 Milestone 4).
 
 ### Decision

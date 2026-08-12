@@ -2,7 +2,7 @@
 doc: KNOWLEDGE_MODEL
 audience: [human, agent]
 status: draft
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 

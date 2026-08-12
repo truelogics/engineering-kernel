@@ -3,7 +3,7 @@ package kernel
 import (
 	"context"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // Collector fetches raw bytes from a Repository. v1 has one

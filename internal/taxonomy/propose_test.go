@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 func docs(pairs ...any) []domain.CanonicalDocument {

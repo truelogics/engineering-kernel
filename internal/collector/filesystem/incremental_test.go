@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // gitRepo sets up a real git repository in a temp dir with an initial

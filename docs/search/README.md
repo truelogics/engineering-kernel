@@ -2,7 +2,7 @@
 doc: search
 audience: [human, agent]
 status: reserved
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 

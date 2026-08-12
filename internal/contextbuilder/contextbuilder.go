@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/truelogics/ai-memory/internal/kernel"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
 )
 
 // ContextBuilder implements kernel.ContextBuilder.

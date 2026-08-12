@@ -2,7 +2,7 @@
 doc: DATABASE
 audience: [human, agent]
 status: draft
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
@@ -22,7 +22,7 @@ One row per Repository registered in the Workspace.
 | Column | Type | Purpose |
 |--------|------|---------|
 | `id` | string (pk) | Stable id, generated at `eng init` / first index |
-| `name` | string | Short name, e.g. `ai-memory` |
+| `name` | string | Short name, e.g. `engineering-kernel` |
 | `remote_url` | string | Git remote, for display and re-clone |
 | `local_path` | string | Absolute path on disk at index time |
 | `last_indexed_commit` | string | SHA of the commit last indexed |

@@ -2,7 +2,7 @@
 doc: RFC
 audience: [human, agent]
 status: accepted
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-12
 ---
 

@@ -34,7 +34,7 @@ behind them.
 ### Why a pipeline at all?
 
 Because the alternative — one component that reads, parses, and stores in
-one pass — can't add a second Source without a rewrite. `ai-memory`,
+one pass — can't add a second Source without a rewrite. `engineering-kernel`,
 `engineering`, `roadmap`, and `vision` are the first four repos; Slack,
 Jira, Notion, and GitHub's API are named future Sources in
 [KNOWLEDGE_MODEL.md](../docs/architecture/KNOWLEDGE_MODEL.md). A monolith

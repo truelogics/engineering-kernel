@@ -14,14 +14,14 @@ resulting_adr:
 ## Summary
 
 Move evidence verification, excerpt normalization and confidence scoring
-out of AI Review's `Validator` and into `pkg/memory`, where two
+out of Engineering Review's `Validator` and into `pkg/memory`, where two
 consumers can reach it. Nothing else moves: rendering, review objects
 and the decision of *what* to claim evidence for stay with the consumer.
 
 ## Motivation
 
 Evidence verification is real, works, and is covered by tests. It lives
-in `ai-review/internal/validator` and nowhere else, which
+in `engineering-review/internal/validator` and nowhere else, which
 `engineering/CAPABILITIES.md` records as **Consumer-only** — implemented
 inside one application, callable by nothing.
 
@@ -34,7 +34,7 @@ and shipping without the capability. It shipped without.
 So two independent consumers now need the same logic, which is the bar
 Rule #1 sets for a kernel change:
 
-- **AI Review** verifies that a model's cited excerpt really appears in
+- **Engineering Review** verifies that a model's cited excerpt really appears in
   the document it claims, and drops the claim when it doesn't.
 - **engineering-mcp** wants to offer the same check to any MCP client,
   so a model writing "per ADR-0003, ..." can have that quote verified
@@ -87,7 +87,7 @@ the markup, or for rewrapping a line.
 
 The kernel can only verify an excerpt against what it returned, and what
 it returns is a search highlight of roughly 40–200 characters, not the
-document (`ai-review/KERNEL_REQUIREMENTS.md` #15). So this capability
+document (`engineering-review/KERNEL_REQUIREMENTS.md` #15). So this capability
 answers "does this quote match the passage retrieval surfaced" and not
 "does this quote appear anywhere in this document." A true quote from
 elsewhere in the same file fails.
@@ -141,16 +141,16 @@ chose.
 
 | Concern | Owner |
 |---|---|
-| What counts as valid evidence | **AI Memory** |
-| Verifying an excerpt against retrieved content | **AI Memory** |
-| Confidence calculation | **AI Memory** |
-| Excerpt normalization and markup cleaning | **AI Memory** |
+| What counts as valid evidence | **Engineering Kernel** |
+| Verifying an excerpt against retrieved content | **Engineering Kernel** |
+| Confidence calculation | **Engineering Kernel** |
+| Excerpt normalization and markup cleaning | **Engineering Kernel** |
 | Deciding what to claim evidence *for* | Consumer |
 | What to do when verification fails | Consumer |
 | Rendering evidence for a human | Consumer |
 | Review objects, findings, severity | Consumer |
 
-AI Review keeps dropping unverifiable claims silently, because a review
+Engineering Review keeps dropping unverifiable claims silently, because a review
 is a finished artifact. `engineering-mcp` will report the failure to the
 client instead, because a model can revise. Same kernel answer, opposite
 consumer policy — which is the test that the split is in the right
@@ -158,10 +158,10 @@ place.
 
 ## Alternatives considered
 
-**Leave it in AI Review and let `engineering-mcp` import it.** Rejected
+**Leave it in Engineering Review and let `engineering-mcp` import it.** Rejected
 by Rule #3: applications never import another application's `internal/`,
-and promoting `ai-review/internal/validator` to `ai-review/pkg/` would
-make AI Review a kernel — a second one, for a capability that belongs in
+and promoting `engineering-review/internal/validator` to `engineering-review/pkg/` would
+make Engineering Review a kernel — a second one, for a capability that belongs in
 the first.
 
 **Verify against files on disk instead of retrieved snippets.** Rejected
@@ -187,13 +187,13 @@ contradiction a reader cannot act on.
 ## Rollout
 
 1. `Evidence`, `Confidence`, `VerifyEvidence` in `pkg/memory`, with the
-   test cases lifted from AI Review's `Validator`.
-2. AI Review's `Validator` calls it; its own matching, normalization and
+   test cases lifted from Engineering Review's `Validator`.
+2. Engineering Review's `Validator` calls it; its own matching, normalization and
    cleaning are **deleted**, not wrapped. A promotion that leaves the
    original in place has created the duplication it was meant to prevent.
 3. `engineering-mcp` exposes `verify_evidence`.
 
-Step 2 is the acceptance criterion: AI Review's behavior must be
+Step 2 is the acceptance criterion: Engineering Review's behavior must be
 unchanged, its tests must pass untouched, and the duplicate logic must
 be gone.
 

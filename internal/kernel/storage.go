@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/truelogics/ai-memory/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // IndexStatus is IndexState's coarse health signal for `eng status`/`eng

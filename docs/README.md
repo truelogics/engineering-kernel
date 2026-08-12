@@ -2,13 +2,13 @@
 doc: docs-index
 audience: [human, agent]
 status: living
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
 # Docs
 
-Technical documentation for AI Memory, one subfolder per concern. Design
+Technical documentation for Engineering Kernel, one subfolder per concern. Design
 proposals live in [`../rfcs/`](../rfcs/), not here — this folder is where an
 accepted RFC's detail gets fleshed out and kept current.
 

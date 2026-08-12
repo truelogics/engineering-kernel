@@ -169,7 +169,7 @@ handling is `eng sync`'s reason to exist, not a fix applied everywhere.
    2) — traversal is pointless without real edges to walk first.
 2. `IncrementalCollector` + `eng sync` (Milestone 3) has no dependency on
    `internal/graph` and can land independently or in parallel.
-3. Dogfood against this same four-repo workspace (`ai-memory`,
+3. Dogfood against this same four-repo workspace (`engineering-kernel`,
    `engineering`, `roadmap`, `vision`) before anything downstream
    (Milestones 4+: embeddings, hybrid search, Context Builder, ranking,
    benchmarks, plugins, public API) gets scoped at all.

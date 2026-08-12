@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	mdchunker "github.com/truelogics/ai-memory/internal/chunker"
-	fscollector "github.com/truelogics/ai-memory/internal/collector/filesystem"
-	"github.com/truelogics/ai-memory/internal/domain"
-	"github.com/truelogics/ai-memory/internal/graph"
-	"github.com/truelogics/ai-memory/internal/kernel"
-	mdnormalizer "github.com/truelogics/ai-memory/internal/normalizer"
-	mdparser "github.com/truelogics/ai-memory/internal/parser/markdown"
-	"github.com/truelogics/ai-memory/internal/storage/sqlite"
+	mdchunker "github.com/truelogics/engineering-kernel/internal/chunker"
+	fscollector "github.com/truelogics/engineering-kernel/internal/collector/filesystem"
+	"github.com/truelogics/engineering-kernel/internal/domain"
+	"github.com/truelogics/engineering-kernel/internal/graph"
+	"github.com/truelogics/engineering-kernel/internal/kernel"
+	mdnormalizer "github.com/truelogics/engineering-kernel/internal/normalizer"
+	mdparser "github.com/truelogics/engineering-kernel/internal/parser/markdown"
+	"github.com/truelogics/engineering-kernel/internal/storage/sqlite"
 )
 
 // --- stubs for isolated control-flow tests ---

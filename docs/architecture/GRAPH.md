@@ -2,7 +2,7 @@
 doc: GRAPH
 audience: [human, agent]
 status: draft
-owner: ai-memory
+owner: engineering-kernel
 last_reviewed: 2026-08-02
 ---
 
@@ -149,7 +149,7 @@ a `deleted` count:
 
 ```
 $ eng sync
-ai-memory: 3 scanned, 1 added, 2 updated, 0 unchanged, 1 deleted, 0 errors
+engineering-kernel: 3 scanned, 1 added, 2 updated, 0 unchanged, 1 deleted, 0 errors
 ```
 
 ## Open questions

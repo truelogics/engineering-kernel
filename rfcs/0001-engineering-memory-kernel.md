@@ -135,7 +135,7 @@ repositories · documents · document_chunks · tags · relationships · index_s
 Repository → Index → Store → Search → Return Knowledge
 ```
 
-If that loop works end-to-end on `ai-memory`, `engineering`, `roadmap`, and
+If that loop works end-to-end on `engineering-kernel`, `engineering`, `roadmap`, and
 `vision` themselves, v1 is done.
 
 ## Alternatives considered
@@ -175,7 +175,7 @@ If that loop works end-to-end on `ai-memory`, `engineering`, `roadmap`, and
 
 1. Land this RFC + `ARCHITECTURE.md` + `DOMAIN_MODEL.md` (Week 1, Mon–Tue).
 2. Bootstrap the Go module and CLI skeleton, no logic (Week 1, Fri).
-3. Implement parser → indexer → storage → search against `ai-memory/` itself
+3. Implement parser → indexer → storage → search against `engineering-kernel/` itself
    (Sprint 2).
 4. Point it at `engineering/`, `roadmap/`, `vision/` and dogfood daily.
 5. Only after `eng search` and `eng ask` are trusted day-to-day does Milestone
