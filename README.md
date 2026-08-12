@@ -3,105 +3,207 @@ doc: README
 audience: [human, agent]
 status: living
 owner: engineering-kernel
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-13
 ---
 
 # Engineering Kernel
 
-## What is this?
+**Your team writes down how you build software — coding rules, decisions,
+architecture notes. This makes an AI assistant actually read them.**
 
-The kernel of the [AI Engineering OS](../vision/README.md). Mission: store,
-organize, retrieve, and connect engineering knowledge. Everything else in the
-OS (context, intelligence, workflows) gets built on top of this, the same way
-an OS grows outward from a kernel — it doesn't start as one.
+Ask Claude Code to review your branch and it reviews it with general
+programming knowledge. It does not know your team decided to stop using
+that library last March, or that you have a rule about how errors are
+wrapped. Those things are written down. Nothing reads them.
 
-It also ships `eng`, which is the **shell of the Engineering OS**
-(`engineering/RFC-0008-eng-cli.md`) rather than this repository's CLI. `eng`
-coordinates; where a capability lives elsewhere, it delegates — `eng doctor`
-runs `engineering-mcp doctor`, `eng review` hands over to Claude Code. A
-developer should never need to know which repository answers a question.
+Engineering Kernel reads them. It builds a searchable index of your
+team's documents, and gives your AI assistant a way to look things up in
+it — so a review can say *"this breaks `engineering:rules/logging.md`"*
+and quote the line.
 
-A persistent context layer for agents. It ingests engineering docs, decisions,
-and conventions so AI systems can remember, enforce, and assist across sessions.
+You need two things: **your code**, and **a repository with your team's
+rules and decisions in it**. Both are just folders of markdown and code
+on your machine.
 
-## Install
+---
 
-Requires **Go 1.25+** and **git**. There are no prebuilt binaries, and
-nothing to clone.
+## Setup
+
+About five minutes. You need [Go 1.25+](https://go.dev/dl/), git, and
+[Claude Code](https://claude.com/claude-code). There is nothing to clone.
+
+### Step 1 — Install the `eng` command
 
 ```bash
 go install github.com/truelogics/engineering-kernel/cmd/eng@latest
-export PATH="$(go env GOPATH)/bin:$PATH"   # in your shell profile, not just this session
+```
 
+Go puts it in `$(go env GOPATH)/bin`, which is usually **not** on your
+`PATH`. Add it, and put this line in your `~/.zshrc` or `~/.bashrc` so it
+survives closing the terminal:
+
+```bash
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+Check it worked:
+
+```bash
+eng version        # → eng version v0.3.0
+```
+
+If you get `command not found`, the `PATH` line above is the reason.
+
+### Step 2 — Run setup
+
+This is the only setup command. Replace the three placeholder paths with
+your own:
+
+```bash
+eng setup ~/engineering-os \
+  --rules ~/code/your-team-rules-repo \
+  --repo  ~/code/your-application
+```
+
+| What you write | What it means |
+|---|---|
+| `~/engineering-os` | A **new, empty folder** for Engineering OS to keep its index in. It creates it. Pick anywhere; this path is a fine default. |
+| `--rules <path>` | The folder holding **your team's rules, decisions and standards**. Often a `docs` repo, a handbook, or an `engineering` repo. |
+| `--repo <path>` | The folder holding **the code you want reviewed**. Repeat `--repo` for each one. |
+
+Both `--rules` and `--repo` also accept a git URL, and it will clone it
+for you:
+
+```bash
 eng setup ~/engineering-os \
   --rules git@github.com:truelogics/engineering.git \
   --repo  ~/code/your-application
 ```
 
-Two commands. The second one creates the workspace, clones and indexes
-what you named, installs `engineering-mcp` if it is missing, registers
-it with Claude Code, and installs the `/review-branch` command. Then:
+You will see it work through four steps, ending in something like:
+
+```
+[2/4] Repositories
+Attached engineering (~/code/your-team-rules-repo)
+  38 scanned, 38 added, 0 updated, 0 unchanged, 0 errors
+
+[3/4] engineering-mcp
+Not installed. Running: go install github.com/truelogics/engineering-mcp/...
+
+[4/4] Claude Code
+Installing Engineering OS for Claude Code
+
+  ✔  Workspace
+  ✔  Claude Code registration
+  ✔  /review-branch command
+
+Done.
+```
+
+**`--rules` is the part that matters.** Skip it and everything still
+installs, works, and has nothing to say — every review is told "no rule
+governs these files", which looks exactly like a correct answer. If you
+are not sure which repository holds your rules, point it at wherever your
+team's markdown lives and refine it later.
+
+### Step 3 — Check it
 
 ```bash
 cd ~/code/your-application
-eng doctor        # eight checks; the first ✘ is the cause, the rest are symptoms
-claude            # then type: /review-branch
+eng doctor
 ```
 
-`--rules` and `--repo` take a local path or a git URL and may be
-repeated. `eng setup` is re-runnable: run it again to add a repository,
-or after rebuilding, to repoint Claude Code at the new binary.
+Eight checks. All `✔` means you are done. If something failed, **fix the
+first `✘` and run it again** — the ones below it are usually just knock-on
+effects of the same problem. Each failure prints the command that fixes
+it.
 
-**`--rules` is the one that matters.** It is whichever repository holds
-your organization's rules, ADRs and standards — for this organization,
-[`engineering`](../engineering/); for yours, perhaps a `docs` repo or a
-handbook. Without it everything works and has nothing to say: a workspace
-holding only your application answers every question about rules with a
-confident "no rule governs this", which reads exactly like a correct
-answer.
-
-The long version, with what each step produces and what goes wrong, is
-[`engineering-mcp/INSTALL.md`](../engineering-mcp/INSTALL.md).
-
-## Use
-
-A **workspace** is one index over one or more repositories — `eng setup`
-created one for you. In any repository you work in:
+### Step 4 — Use it
 
 ```bash
-eng taxonomy auto   # propose what this repository's directories mean, and ask
-eng update          # incremental re-index after documents change
-eng status          # what is indexed, and whether a rulebook is present
+cd ~/code/your-application
+claude
+```
+
+Then type:
+
+```
+/review-branch
+```
+
+**Type that command — do not ask in your own words.** Saying "review my
+branch" lets any other review tool on your machine answer instead, and
+when that happens none of this is used. Measured on the same commit,
+minutes apart: `/review-branch` consulted the team's knowledge 9 times;
+"Review my current branch." consulted it 0 times.
+
+---
+
+## Jargon you will see
+
+| Word | What it actually is |
+|---|---|
+| **workspace** | The folder from step 2. One search index covering the repositories you attached. |
+| **rulebook** | The repository you passed to `--rules`. |
+| **attach** | Add a repository to the workspace and index it. |
+| **index** | The searchable copy of your documents, in `.eng/memory.db`. Rebuild it when documents change. |
+| **taxonomy** | A short file saying what a folder contains — "everything in `adr/` is a decision". Optional, but it is what makes documents findable by kind. |
+
+---
+
+## Everyday use
+
+```bash
+eng update          # re-index after your documents change — do this, nothing is automatic
+eng status          # what is indexed, and whether your rules were found
 eng search "authentication"
 eng ask "how do we handle permission caching?"
-eng doctor          # check the whole machine, and say what to fix
-eng review          # check the setup, then hand over to Claude Code
+eng doctor          # check everything and say what to fix
 ```
 
-To add a repository later, either re-run `eng setup` with another
-`--repo`, or attach it directly:
+**Adding another repository later:**
 
 ```bash
-cd ~/engineering-os && eng workspace attach ~/code/another-application
+eng setup ~/engineering-os --repo ~/code/another-application
 ```
 
-Every command, with what each is for and how it fails, is in
-[`docs/cli/CLI.md`](docs/cli/CLI.md). When something is wrong, run
-`eng doctor` first — it checks the binaries, the workspace, the index,
-retrieval, and the Claude Code side, and names the first thing that
-is broken.
+`eng setup` is safe to run again as often as you like.
 
-## Why does it exist?
+**Getting more out of your own repository** — by default only documents
+with a `doc:` line at the top are understood by kind. To classify the
+rest, run this inside a repository and it proposes a mapping and asks
+before writing anything:
 
-Agents start fresh every session. Knowledge lives in scattered docs and people's
-heads. Engineering Kernel turns `engineering/` (and related repos) into queryable memory
-agents can load on demand.
+```bash
+eng taxonomy auto
+```
 
-## Who is it for?
+Full command reference: [`docs/cli/CLI.md`](docs/cli/CLI.md). Longer
+install guide with what to do when things break:
+[`engineering-mcp/INSTALL.md`](https://github.com/truelogics/engineering-mcp/blob/main/INSTALL.md).
 
-- Agents that need durable context (review, codegen, onboarding)
-- Engineers building or integrating agent tooling
-- Anyone defining how memory is ingested and queried
+---
+
+## How it fits together
+
+`eng` is the **shell of the Engineering OS**
+([RFC-0008](https://github.com/truelogics/engineering/blob/main/RFC-0008-eng-cli.md)),
+not just this repository's CLI. It coordinates and delegates: `eng
+doctor` runs `engineering-mcp doctor`, `eng review` hands over to Claude
+Code. You should never need to know which repository answers what.
+
+```
+You  →  eng            (index, search, setup)
+        engineering-mcp (serves the index to Claude Code)
+        Claude Code     (does the actual reviewing)
+```
+
+This repository is the kernel: store, organize, retrieve and connect
+engineering knowledge. Everything else in the OS is built on top of it.
+
+Agents start fresh every session, and knowledge lives in scattered docs
+and people's heads. This turns those documents into memory an agent can
+load on demand.
 
 ## Current status
 
@@ -122,8 +224,8 @@ than from a plan.
 ## Roadmap
 
 This repo has no roadmap file of its own — company-wide priority lives in
-[`roadmap/NOW.md`](../roadmap/NOW.md) and milestones in
-[`roadmap/MILESTONES.md`](../roadmap/MILESTONES.md), so there's exactly one
+[`roadmap/NOW.md`](https://github.com/truelogics/roadmap/blob/main/NOW.md) and milestones in
+[`roadmap/MILESTONES.md`](https://github.com/truelogics/roadmap/blob/main/MILESTONES.md), so there's exactly one
 place to check what's next, not two that can drift out of sync.
 
 ## Contributing
@@ -141,7 +243,7 @@ place to check what's next, not two that can drift out of sync.
    implemented), and
    [`CLI.md`](docs/cli/CLI.md)
 2. Significant design → open an RFC under `rfcs/` (start from `0000-template.md`)
-3. Org-wide decisions also land in [`engineering/ADR/`](../engineering/ADR/)
+3. Org-wide decisions also land in [`engineering/ADR/`](https://github.com/truelogics/engineering/tree/main/ADR/)
 
 Code dirs: `cmd/`, `internal/` and `pkg/` are implemented (see
 [`internal/README.md`](internal/README.md) for the package map);
@@ -151,9 +253,9 @@ Code dirs: `cmd/`, `internal/` and `pkg/` are implemented (see
 
 | Repo | Role |
 |------|------|
-| [`engineering/`](../engineering/) | Source docs & rules consumed by memory |
-| [`roadmap/`](../roadmap/) | Company priorities |
-| [`vision/`](../vision/) | Company north star |
+| [`engineering/`](https://github.com/truelogics/engineering) | Source docs & rules consumed by memory |
+| [`roadmap/`](https://github.com/truelogics/roadmap) | Company priorities |
+| [`vision/`](https://github.com/truelogics/vision) | Company north star |
 
 ## Map
 
