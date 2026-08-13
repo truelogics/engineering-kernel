@@ -62,6 +62,30 @@ Claude Code and installs the `/review-branch` command.
 repeated. They do the same thing; the two spellings exist so the intent
 is readable, and naming the same repository twice is harmless.
 
+`--rules-dir <dir>` is the single-repository equivalent, and it is not
+the same operation. `--rules` names a *repository* to index; `--rules-dir`
+names a *directory inside the repository being set up* and declares that
+it holds rules, by merging `<dir>/**: Rule` into `.engineering.yaml` and
+re-indexing.
+
+It exists because the two shapes of team were not equally served. A team
+with a separate rulebook points `--rules` at it. A team with one
+repository holding handbook, docs, plans and code had nowhere to point,
+and `eng taxonomy auto` does not close the gap: it proposes `handbook/**`
+as *Guide*, which is what a handbook usually is, and the workspace still
+holds zero rules. Measured on that layout — 6 documents indexed, 0 rules,
+and a review told nothing governed the code.
+
+Which directory holds *enforceable* rules is a claim only the owner can
+make, so it is a flag they type rather than something inferred. It
+follows RFC-0009 like every other write to that file: it shows what it
+will add, asks, treats EOF as no, and merges rather than replaces — a
+pattern the repository already declares keeps its own wording, whatever
+it says. `--yes` answers the prompt on the command line.
+
+Refused on a container workspace, where there is no single
+`.engineering.yaml` to write and the file would be read by nobody.
+
 Setup finishes by **counting the rules it indexed** and saying so. That
 number is measured, not inferred from whether `--rules` was passed — a
 team whose rules sit in the same repository as their code names no

@@ -30,8 +30,16 @@ type SetupOptions struct {
 	Rules []string
 	// Repos is the code to be reviewed.
 	Repos []string
+	// RulesDirs names directories *inside* the repository being set up
+	// that hold rules — the single-repository team's answer to "where
+	// are your rules?", where there is no separate rulebook to name.
+	RulesDirs []string
 	// Force overwrites an existing /review-branch command.
 	Force bool
+	// AssumeYes writes the rules declaration without the prompt.
+	AssumeYes bool
+	// In is where a confirmation prompt reads from. Nil means os.Stdin.
+	In io.Reader
 }
 
 // Setup implements `eng setup`: everything between a machine with the
@@ -64,6 +72,16 @@ func Setup(ctx context.Context, dir string, out io.Writer, opts SetupOptions) er
 	// 1 and 2. The workspace and what goes in it.
 	failed, err := prepareWorkspace(ctx, absDir, targets, out)
 	if err != nil {
+		return err
+	}
+
+	// Declared after indexing, because the proposal and the re-index it
+	// triggers both need the documents to be in the workspace already.
+	in := opts.In
+	if in == nil {
+		in = os.Stdin
+	}
+	if err := declareRules(ctx, absDir, opts.RulesDirs, in, out, opts.AssumeYes); err != nil {
 		return err
 	}
 
@@ -327,11 +345,18 @@ func printSetupNext(ctx context.Context, out io.Writer, absDir string) {
 	case counted:
 		fmt.Fprintln(out, "\nNo rules were found in what you indexed, so reviews here will be told that")
 		fmt.Fprintln(out, "no engineering rule governs anything — indistinguishable from a correct")
-		fmt.Fprintln(out, "answer. If your team's rules live somewhere else, add that repository:")
+		fmt.Fprintln(out, "answer.")
+		// --rules-dir, not `eng taxonomy auto`. Naming taxonomy auto here
+		// was wrong and was measured wrong: on a repository with a
+		// handbook/ of real rules it proposes handbook/** as Guide — which
+		// is what a handbook usually is — and the workspace still holds
+		// zero rules afterwards. It cannot fix this, because which
+		// directory holds *enforceable* rules is a claim only the owner
+		// can make.
+		fmt.Fprintln(out, "\nIf a directory in this repository holds your rules, say which one:")
+		fmt.Fprintf(out, "    eng setup %s --rules-dir handbook\n", absDir)
+		fmt.Fprintln(out, "\nIf they live in a different repository, name that instead:")
 		fmt.Fprintf(out, "    eng setup %s --rules /path/to/your-rules-repo\n", absDir)
-		fmt.Fprintln(out, "\nIf they live in what you just indexed, they are probably not recognised as")
-		fmt.Fprintln(out, "rules yet. Run `eng taxonomy auto` in that repository — it proposes what")
-		fmt.Fprintln(out, "your directories mean, and asks before writing anything.")
 	}
 	fmt.Fprintln(out, "\nNext:")
 	fmt.Fprintln(out, "    cd /path/to/your-application")
