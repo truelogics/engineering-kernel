@@ -60,23 +60,64 @@ If you get `command not found`, the `PATH` line above is the reason.
 `eng setup` is the only setup command. **Pick the line below that matches
 your situation** — you probably want the first one.
 
-#### If you have one repo with everything in it
+There are two shapes of team. Find yours.
 
-Most teams do. Your code, your docs, your notes, all in one place, and no
-separate "rules repository" anywhere. Then there is nothing to configure:
+---
+
+#### Case A — everything in one repo
+
+Your code, handbook, docs and plans all live in one repository. No
+separate "rules repo" anywhere. **This is most teams.**
 
 ```bash
-cd ~/code/my-app
-eng setup .
+cd ~/code/my-project
+eng setup . --rules-dir handbook
 ```
 
-That indexes the repository you are standing in. Nothing else is needed
-and nothing else is required — no `--rules`, no `--repo`, no extra
-folder.
+`--rules-dir` is the important part, and it is the one thing you have to
+decide: **which folder holds the rules you want reviews to enforce.**
+Pass the folder name — `handbook`, `docs/standards`, `engineering`,
+whatever yours is called. Repeat it for more than one:
 
-#### If your team's rules live in a different repo
+```bash
+eng setup . --rules-dir handbook --rules-dir docs/standards
+```
 
-Then name both, and give it a folder to keep the shared index in:
+It shows you what it will write, and **asks before writing anything**:
+
+```
+Declaring where your rules live
+
+  handbook/**              → Rule
+
+Creating ~/code/my-project/.engineering.yaml. Lines you already wrote are kept unchanged.
+
+Write it? [y/N]
+```
+
+That creates a small `.engineering.yaml` in your repo saying "everything
+in `handbook/` is a rule", re-indexes, and reports:
+
+```
+2 rule(s) indexed. Reviews here can cite them.
+```
+
+**Why you have to say it.** Nothing can safely guess that your handbook
+contains enforceable rules rather than general advice — most handbooks
+are advice. Without `--rules-dir` you get a working install that finds
+**0 rules**, and every review is told nothing governs your code, which
+reads exactly like a correct answer. Adding the flag later is fine; it is
+the same command again.
+
+Don't know which folder? Run `eng setup .` first, then look at
+`eng status`, then re-run with the flag.
+
+---
+
+#### Case B — rules in a separate repo
+
+Your organization keeps standards, ADRs and rules in their own
+repository, apart from the code.
 
 ```bash
 eng setup ~/engineering-os \
@@ -84,24 +125,28 @@ eng setup ~/engineering-os \
   --repo  ~/code/your-application
 ```
 
+Here `~/engineering-os` is a **new empty folder** that holds one shared
+index over both repositories, so a review of your application can cite
+the rules repo. No `--rules-dir` needed — a repo you point `--rules` at
+is treated as rules already.
+
+---
+
 #### What each part is, and whether you need it
 
 | Part | Required? | What it is |
 |---|---|---|
-| the path (`.` or `~/engineering-os`) | **optional** — defaults to the folder you are in | Where the index is kept. Use `.` when it's one repo. Use a **new empty folder** when you are combining several repos, so it can hold them together. |
-| `--rules <path>` | **optional** | The repo holding your team's rules, decisions and standards — a `docs` repo, a handbook, an `engineering` repo. Leave it out if those live in the code repo. |
-| `--repo <path>` | **optional** | Another repo to index. Repeat it for each one. Leave it out if you are running inside the only repo. |
+| the path (`.` or `~/engineering-os`) | **optional** — defaults to where you are | Where the index lives. `.` for Case A. A new empty folder for Case B, so it can hold several repos together. |
+| `--rules-dir <folder>` | **Case A: effectively yes** | A folder *inside this repo* holding your rules. Without it, nothing is classified as a rule. Repeatable. |
+| `--rules <repo>` | **Case B only** | A separate *repository* of rules. Repeatable; accepts a git URL. |
+| `--repo <repo>` | optional | Another repository to index. Repeatable; accepts a git URL. |
+| `--yes` | optional | Skip the confirmation prompt. |
 
-Both `--rules` and `--repo` also accept a **git URL**, and it will clone
-it for you:
+`--rules` and `--repo` both take a **git URL** too, and it clones for you:
 
 ```bash
 eng setup ~/engineering-os --rules git@github.com:truelogics/engineering.git
 ```
-
-`--rules` and `--repo` do the same thing — index a repository. They are
-two words for one action so the output can tell you whether it found any
-rules. Nothing breaks if you use the wrong one.
 
 You will see it work through four steps, ending in something like:
 
@@ -130,13 +175,13 @@ Done.
 ```
 
 If it says it found **none**, reviews will be told that nothing governs
-your files — which looks exactly like a correct answer, so it is worth
-fixing. Two reasons it happens:
+your files — which looks exactly like a correct answer, so fix it before
+going further:
 
-- your rules are in a repo you did not index → add it with `--rules`
-- your rules are in what you *did* index, but nothing marks them as
-  rules → run `eng taxonomy auto` in that repo (see
-  [Making your own documents findable](#making-your-own-documents-findable))
+- **Case A** — re-run naming the folder your rules are in:
+  `eng setup . --rules-dir handbook`
+- **Case B** — the repo you pointed `--rules` at may hold no rules; check
+  you named the right one.
 
 ### Step 3 — Check it
 
@@ -176,7 +221,8 @@ minutes apart: `/review-branch` consulted the team's knowledge 9 times;
 | Word | What it actually is |
 |---|---|
 | **workspace** | The folder holding the index. It is your repository itself if you ran `eng setup .`, or the shared folder if you combined several. |
-| **rulebook** | Wherever your team's rules live. Often just a folder inside your code repo — it does not have to be a separate repository. |
+| **rulebook** | Wherever your rules live — a folder in your repo (`--rules-dir`) or a separate repository (`--rules`). |
+| **`.engineering.yaml`** | A few lines in your repo saying what each folder holds. `--rules-dir` writes it for you, and you can edit it. |
 | **attach** | Add a repository to the workspace and index it. |
 | **index** | The searchable copy of your documents, in `.eng/memory.db`. Rebuild it when documents change. |
 | **taxonomy** | A short file saying what a folder contains — "everything in `adr/` is a decision". Optional, but it is what makes documents findable by kind. |
@@ -201,23 +247,30 @@ eng setup ~/engineering-os --repo ~/code/another-application
 
 `eng setup` is safe to run again as often as you like.
 
-### Making your own documents findable
+### Classifying the rest of your documents
 
-By default, a document is only understood *as a rule* (or a decision, or
-architecture) if it has a `doc:` line at the top. Everything else is
-found by keyword only. On the first repository this was measured on,
-that was **91% of the documents**.
+`--rules-dir` handles rules. Your other folders — architecture notes,
+decisions, specs — are found by keyword but not *by kind* until
+something says what they are. On the first repository this was measured
+on, that was **91% of the documents**.
 
-If your docs live alongside your code and none of them have that line —
-the common case for a single-repo team — run this inside the repository:
+To sort out the rest, run this inside the repository:
 
 ```bash
 eng taxonomy auto
 ```
 
-It looks at what your folders contain, proposes something like *"treat
-everything in `docs/adr/` as a decision"*, shows you how many documents
-that would change, and **asks before writing anything**. You can say no.
+It reads what your folders contain and proposes mappings — *"everything
+in `plans/` is Planning"* — shows how many documents each would change,
+and **asks before writing anything**. It merges with the
+`.engineering.yaml` that `--rules-dir` wrote; neither overwrites the
+other.
+
+It is deliberately cautious, and it will **not** guess that a folder
+holds rules — a `handbook/` is proposed as *Guide*, because most
+handbooks are advice rather than enforceable rules. That call is yours,
+which is what `--rules-dir` is for. A folder with an ambiguous name like
+`docs/` is left alone entirely and listed with the reason.
 
 Full command reference: [`docs/cli/CLI.md`](docs/cli/CLI.md). Longer
 install guide with what to do when things break:

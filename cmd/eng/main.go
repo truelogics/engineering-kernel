@@ -56,12 +56,14 @@ func main() {
 
 	// --- Getting started --------------------------------------------
 	case "setup":
-		path, flags := splitFlags(args, "rules", "repo")
+		path, flags := splitFlags(args, "rules", "repo", "rules-dir")
 		fs := flag.NewFlagSet("setup", flag.ExitOnError)
 		var opts cli.SetupOptions
 		fs.Var(repeatable{&opts.Rules}, "rules", "path or git URL of your rules/ADR repository (repeatable)")
 		fs.Var(repeatable{&opts.Repos}, "repo", "path or git URL of a repository to index (repeatable)")
+		fs.Var(repeatable{&opts.RulesDirs}, "rules-dir", "directory inside this repository that holds rules, e.g. handbook (repeatable)")
 		fs.BoolVar(&opts.Force, "force", false, "overwrite an existing /review-branch command")
+		fs.BoolVar(&opts.AssumeYes, "yes", false, "write the rules declaration without asking")
 		fs.Parse(flags)
 		err = cli.Setup(ctx, firstArgOr(path, "."), os.Stdout, opts)
 
@@ -231,8 +233,12 @@ Getting started:
   your documents, there is nothing to configure:
     cd ~/code/my-app && eng setup .
 
-  When your rules live in another repository, name them. Both flags take a
-  local path or a git URL, and may be repeated:
+  If a directory in that repository holds your rules, say so — otherwise
+  nothing is classified as a rule and reviews cite nothing:
+    eng setup . --rules-dir handbook
+
+  When your rules live in another repository, name that instead. --rules
+  and --repo take a local path or a git URL, and may be repeated:
     eng setup ~/engineering-os \
       --rules git@github.com:truelogics/engineering.git \
       --repo ~/code/your-application
