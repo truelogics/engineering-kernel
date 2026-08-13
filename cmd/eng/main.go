@@ -222,14 +222,17 @@ Usage:
   eng <command> [args]
 
 Getting started:
-  setup [path] --rules <repo> [--repo <repo>]
-                           do all of it: workspace, index, MCP, Claude Code
+  setup [path]             do all of it: workspace, index, MCP, Claude Code
   doctor                   check this machine end to end, and say what to fix
   taxonomy auto            propose what this repository's directories mean, and ask
   review                   check the setup, then hand over to Claude Code
 
-  --rules and --repo take a local path or a git URL, and may be repeated.
-  Example:
+  Everything is optional. Inside a repository holding both your code and
+  your documents, there is nothing to configure:
+    cd ~/code/my-app && eng setup .
+
+  When your rules live in another repository, name them. Both flags take a
+  local path or a git URL, and may be repeated:
     eng setup ~/engineering-os \
       --rules git@github.com:truelogics/engineering.git \
       --repo ~/code/your-application

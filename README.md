@@ -21,9 +21,10 @@ team's documents, and gives your AI assistant a way to look things up in
 it — so a review can say *"this breaks `engineering:rules/logging.md`"*
 and quote the line.
 
-You need two things: **your code**, and **a repository with your team's
-rules and decisions in it**. Both are just folders of markdown and code
-on your machine.
+All it needs is a repository with some written documents in it. That can
+be the same repository as your code — most teams have exactly one, with
+the docs sitting alongside the source, and that works. If your team keeps
+its standards in a separate repo, it can read both together.
 
 ---
 
@@ -56,8 +57,26 @@ If you get `command not found`, the `PATH` line above is the reason.
 
 ### Step 2 — Run setup
 
-This is the only setup command. Replace the three placeholder paths with
-your own:
+`eng setup` is the only setup command. **Pick the line below that matches
+your situation** — you probably want the first one.
+
+#### If you have one repo with everything in it
+
+Most teams do. Your code, your docs, your notes, all in one place, and no
+separate "rules repository" anywhere. Then there is nothing to configure:
+
+```bash
+cd ~/code/my-app
+eng setup .
+```
+
+That indexes the repository you are standing in. Nothing else is needed
+and nothing else is required — no `--rules`, no `--repo`, no extra
+folder.
+
+#### If your team's rules live in a different repo
+
+Then name both, and give it a folder to keep the shared index in:
 
 ```bash
 eng setup ~/engineering-os \
@@ -65,20 +84,24 @@ eng setup ~/engineering-os \
   --repo  ~/code/your-application
 ```
 
-| What you write | What it means |
-|---|---|
-| `~/engineering-os` | A **new, empty folder** for Engineering OS to keep its index in. It creates it. Pick anywhere; this path is a fine default. |
-| `--rules <path>` | The folder holding **your team's rules, decisions and standards**. Often a `docs` repo, a handbook, or an `engineering` repo. |
-| `--repo <path>` | The folder holding **the code you want reviewed**. Repeat `--repo` for each one. |
+#### What each part is, and whether you need it
 
-Both `--rules` and `--repo` also accept a git URL, and it will clone it
-for you:
+| Part | Required? | What it is |
+|---|---|---|
+| the path (`.` or `~/engineering-os`) | **optional** — defaults to the folder you are in | Where the index is kept. Use `.` when it's one repo. Use a **new empty folder** when you are combining several repos, so it can hold them together. |
+| `--rules <path>` | **optional** | The repo holding your team's rules, decisions and standards — a `docs` repo, a handbook, an `engineering` repo. Leave it out if those live in the code repo. |
+| `--repo <path>` | **optional** | Another repo to index. Repeat it for each one. Leave it out if you are running inside the only repo. |
+
+Both `--rules` and `--repo` also accept a **git URL**, and it will clone
+it for you:
 
 ```bash
-eng setup ~/engineering-os \
-  --rules git@github.com:truelogics/engineering.git \
-  --repo  ~/code/your-application
+eng setup ~/engineering-os --rules git@github.com:truelogics/engineering.git
 ```
+
+`--rules` and `--repo` do the same thing — index a repository. They are
+two words for one action so the output can tell you whether it found any
+rules. Nothing breaks if you use the wrong one.
 
 You will see it work through four steps, ending in something like:
 
@@ -100,11 +123,20 @@ Installing Engineering OS for Claude Code
 Done.
 ```
 
-**`--rules` is the part that matters.** Skip it and everything still
-installs, works, and has nothing to say — every review is told "no rule
-governs these files", which looks exactly like a correct answer. If you
-are not sure which repository holds your rules, point it at wherever your
-team's markdown lives and refine it later.
+**Read the last line.** It counts the rules it actually found:
+
+```
+1 rule(s) indexed. Reviews here can cite them.
+```
+
+If it says it found **none**, reviews will be told that nothing governs
+your files — which looks exactly like a correct answer, so it is worth
+fixing. Two reasons it happens:
+
+- your rules are in a repo you did not index → add it with `--rules`
+- your rules are in what you *did* index, but nothing marks them as
+  rules → run `eng taxonomy auto` in that repo (see
+  [Making your own documents findable](#making-your-own-documents-findable))
 
 ### Step 3 — Check it
 
@@ -143,8 +175,8 @@ minutes apart: `/review-branch` consulted the team's knowledge 9 times;
 
 | Word | What it actually is |
 |---|---|
-| **workspace** | The folder from step 2. One search index covering the repositories you attached. |
-| **rulebook** | The repository you passed to `--rules`. |
+| **workspace** | The folder holding the index. It is your repository itself if you ran `eng setup .`, or the shared folder if you combined several. |
+| **rulebook** | Wherever your team's rules live. Often just a folder inside your code repo — it does not have to be a separate repository. |
 | **attach** | Add a repository to the workspace and index it. |
 | **index** | The searchable copy of your documents, in `.eng/memory.db`. Rebuild it when documents change. |
 | **taxonomy** | A short file saying what a folder contains — "everything in `adr/` is a decision". Optional, but it is what makes documents findable by kind. |
@@ -169,14 +201,23 @@ eng setup ~/engineering-os --repo ~/code/another-application
 
 `eng setup` is safe to run again as often as you like.
 
-**Getting more out of your own repository** — by default only documents
-with a `doc:` line at the top are understood by kind. To classify the
-rest, run this inside a repository and it proposes a mapping and asks
-before writing anything:
+### Making your own documents findable
+
+By default, a document is only understood *as a rule* (or a decision, or
+architecture) if it has a `doc:` line at the top. Everything else is
+found by keyword only. On the first repository this was measured on,
+that was **91% of the documents**.
+
+If your docs live alongside your code and none of them have that line —
+the common case for a single-repo team — run this inside the repository:
 
 ```bash
 eng taxonomy auto
 ```
+
+It looks at what your folders contain, proposes something like *"treat
+everything in `docs/adr/` as a decision"*, shows you how many documents
+that would change, and **asks before writing anything**. You can say no.
 
 Full command reference: [`docs/cli/CLI.md`](docs/cli/CLI.md). Longer
 install guide with what to do when things break:

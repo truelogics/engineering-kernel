@@ -3,7 +3,7 @@ doc: CLI
 audience: [human, agent]
 status: living
 owner: engineering-kernel
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-13
 ---
 
 # eng — the Engineering OS shell
@@ -31,10 +31,21 @@ delegates to. What follows is what the binary does.
 
 ## Getting started
 
-### `eng setup [path] --rules <repo> [--repo <repo>]`
+### `eng setup [path] [--rules <repo>] [--repo <repo>]`
 
 Everything between a machine with `eng` on it and a machine where
-`/review-branch` cites your organization's own decisions:
+`/review-branch` cites your organization's own decisions.
+
+Every argument is optional. Run inside a repository whose documents and
+code live together — the common case — and there is nothing to configure:
+
+```bash
+cd ~/code/my-app && eng setup .
+```
+
+That indexes the repository you are standing in. When the rules live in a
+different repository, name both and give it a directory to hold the
+shared index:
 
 ```bash
 eng setup ~/engineering-os \
@@ -48,10 +59,16 @@ hand over to `engineering-mcp install`, which registers the server with
 Claude Code and installs the `/review-branch` command.
 
 `--rules` and `--repo` each take a local path or a git URL, and may be
-repeated. They differ only in that setup warns when no `--rules` was
-given: a workspace with no rulebook answers every question about rules
-with a confident "none", and that is indistinguishable from a correct
-answer.
+repeated. They do the same thing; the two spellings exist so the intent
+is readable, and naming the same repository twice is harmless.
+
+Setup finishes by **counting the rules it indexed** and saying so. That
+number is measured, not inferred from whether `--rules` was passed — a
+team whose rules sit in the same repository as their code names no
+rulebook and has one, and a team that named a repository holding no rules
+has none. A workspace with no rules answers every question about them
+with a confident "none", which is indistinguishable from a correct
+answer, so it is worth stating either way.
 
 **Re-runnable.** Run it again to add a repository, or after rebuilding,
 to repoint Claude Code at the new binary. One unreachable path is

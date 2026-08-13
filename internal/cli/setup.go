@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/truelogics/engineering-kernel/internal/domain"
 )
 
 // mcpModule is where `engineering-mcp` is installed from when it is
@@ -92,7 +94,7 @@ func Setup(ctx context.Context, dir string, out io.Writer, opts SetupOptions) er
 		return fmt.Errorf("setup: %d repository/repositories could not be attached: %s",
 			len(failed), strings.Join(failed, ", "))
 	}
-	printSetupNext(out, absDir, opts)
+	printSetupNext(ctx, out, absDir)
 	return nil
 }
 
@@ -134,10 +136,28 @@ func prepareWorkspace(ctx context.Context, absDir string, targets []string, out 
 	}
 
 	fmt.Fprintf(out, "\n[2/4] Repositories\n")
-	if len(targets) == 0 {
-		fmt.Fprintln(out, "None named. Attach them with:")
-		fmt.Fprintf(out, "    cd %s && eng workspace attach /path/to/your-rules-repo\n", absDir)
+
+	// Pointed straight at a repository, with nothing named: that
+	// repository is the workspace, and it is what to index.
+	//
+	// It was previously left registered and unindexed, and setup went on
+	// to report success — `eng setup ~/code/my-app` produced a working
+	// installation over an empty index, which answers every question with
+	// "nothing found". Indexing only ever happened inside the loop below,
+	// which no target entered. The single-repository team, who has no
+	// separate rulebook to name, is exactly who hits this.
+	if len(targets) == 0 && isGitRepository(absDir) {
+		fmt.Fprintln(out, "None named, so indexing this repository itself.")
+		if err := WorkspaceAttach(ctx, absDir, absDir, out); err != nil {
+			return nil, err
+		}
 	}
+	if len(targets) == 0 && !isGitRepository(absDir) {
+		fmt.Fprintln(out, "None named, and this directory is not a git repository, so there is")
+		fmt.Fprintln(out, "nothing to index yet. Add one with:")
+		fmt.Fprintf(out, "    eng setup %s --repo /path/to/your-repository\n", absDir)
+	}
+
 	for _, target := range targets {
 		path, err := obtain(ctx, absDir, target, out)
 		if err != nil {
@@ -270,21 +290,48 @@ func goBin() string {
 	return filepath.Join(os.Getenv("HOME"), "go", "bin")
 }
 
+// indexedRuleCount reports how many rules the workspace actually holds.
+// Best-effort: counted reports whether the question could be answered at
+// all, so a store that will not open is not reported as "no rules".
+func indexedRuleCount(ctx context.Context, absDir string) (count int, counted bool) {
+	store, err := openStore(absDir, false)
+	if err != nil {
+		return 0, false
+	}
+	defer store.Close()
+	rules, err := store.ListDocumentsByType(ctx, domain.DocTypeRule)
+	if err != nil {
+		return 0, false
+	}
+	return len(rules), true
+}
+
 func isGitRepository(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, ".git"))
 	return err == nil && (info.IsDir() || info.Mode().IsRegular())
 }
 
-func printSetupNext(out io.Writer, absDir string, opts SetupOptions) {
+func printSetupNext(ctx context.Context, out io.Writer, absDir string) {
 	fmt.Fprintln(out, "\nDone.")
-	if len(opts.Rules) == 0 {
-		// Said even when the developer attached repositories, because
-		// the failure it describes is silent: retrieval succeeds, finds
-		// no rules, and reports that nothing governs the change — which
-		// reads exactly like a correct answer.
-		fmt.Fprintln(out, "\nNo rulebook was named, so reviews here will be told that no engineering rule")
-		fmt.Fprintln(out, "governs anything — which is indistinguishable from a correct answer. Add one:")
+
+	// Counted, not inferred from whether --rules was passed. A team whose
+	// rules live in the same repository as their code names no rulebook
+	// and has one; a team that named a repository holding no rules has
+	// none. Only the index knows which, and the failure it decides is
+	// silent — retrieval succeeds, finds nothing, and reports that no
+	// rule governs the change, which reads exactly like a correct answer.
+	rules, counted := indexedRuleCount(ctx, absDir)
+	switch {
+	case counted && rules > 0:
+		fmt.Fprintf(out, "\n%d rule(s) indexed. Reviews here can cite them.\n", rules)
+	case counted:
+		fmt.Fprintln(out, "\nNo rules were found in what you indexed, so reviews here will be told that")
+		fmt.Fprintln(out, "no engineering rule governs anything — indistinguishable from a correct")
+		fmt.Fprintln(out, "answer. If your team's rules live somewhere else, add that repository:")
 		fmt.Fprintf(out, "    eng setup %s --rules /path/to/your-rules-repo\n", absDir)
+		fmt.Fprintln(out, "\nIf they live in what you just indexed, they are probably not recognised as")
+		fmt.Fprintln(out, "rules yet. Run `eng taxonomy auto` in that repository — it proposes what")
+		fmt.Fprintln(out, "your directories mean, and asks before writing anything.")
 	}
 	fmt.Fprintln(out, "\nNext:")
 	fmt.Fprintln(out, "    cd /path/to/your-application")
