@@ -138,6 +138,23 @@ func (s *Search) Search(ctx context.Context, query string, opts kernel.SearchOpt
 		return nil, fmt.Errorf("search: %w", err)
 	}
 	sort.SliceStable(scored, func(i, j int) bool { return scored[i].blended > scored[j].blended })
+
+	// One row per document, keeping its best-scoring passage.
+	//
+	// Chunks are what FTS matches, and a long document matches on several
+	// of them — so without this the same path appears repeatedly. That is
+	// untidy in `eng search` and actively harmful here: the collapse
+	// happens *before* the limit is applied, because trimming first spends
+	// result slots on repeats and pushes genuinely different documents off
+	// the end. Measured on a 745-document repository, one query returned
+	// 18 rows covering 15 distinct documents — three slots wasted, three
+	// documents never seen.
+	//
+	// This is also the behaviour already promised to clients:
+	// engineering-mcp's /review-branch command tells the model that "only
+	// the top-scoring passage per document is kept", and reasons about
+	// verify_evidence on that basis.
+	scored = collapseToDocuments(scored)
 	if len(scored) > limit {
 		scored = scored[:limit]
 	}
@@ -157,6 +174,27 @@ func (s *Search) Search(ctx context.Context, query string, opts kernel.SearchOpt
 		})
 	}
 	return results, nil
+}
+
+// collapseToDocuments keeps the first occurrence of each document.
+//
+// Order-preserving, and it relies on the caller having sorted by score
+// already: "first" is therefore "best". Written this way rather than as a
+// map-then-rebuild so a document's position is decided by its best
+// passage and nothing else — a document must not move because it happened
+// to match twice.
+func collapseToDocuments(scored []scoredMatch) []scoredMatch {
+	seen := make(map[string]bool, len(scored))
+	out := scored[:0:0]
+	for _, sc := range scored {
+		id := sc.match.Document.ID
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, sc)
+	}
+	return out
 }
 
 // relatedDocuments finds other documents connected to doc: explicit
