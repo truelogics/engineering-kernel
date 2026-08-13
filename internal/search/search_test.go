@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/truelogics/engineering-kernel/internal/domain"
@@ -161,5 +162,101 @@ func TestSearchNoMatchReturnsEmpty(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("Search(nonexistentterm) = %+v, want no results", results)
+	}
+}
+
+// putDocWithChunks is the real shape of a long document: one document,
+// several chunks, each of which FTS can match independently. putDoc
+// stores exactly one chunk and so cannot reproduce this.
+func putDocWithChunks(t *testing.T, ctx context.Context, storage kernel.Storage, repoID, path string, bodies ...string) domain.CanonicalDocument {
+	t.Helper()
+	doc, err := domain.NewCanonicalDocument(repoID, repoID, path)
+	if err != nil {
+		t.Fatalf("NewCanonicalDocument: %v", err)
+	}
+	doc.Content = strings.Join(bodies, "\n\n")
+	if err := storage.PutDocument(ctx, doc); err != nil {
+		t.Fatalf("PutDocument: %v", err)
+	}
+	chunks := make([]domain.Chunk, 0, len(bodies))
+	for i, body := range bodies {
+		chunk, err := domain.NewChunk(doc.ID, i, "", body)
+		if err != nil {
+			t.Fatalf("NewChunk: %v", err)
+		}
+		chunks = append(chunks, chunk)
+	}
+	if err := storage.PutChunks(ctx, doc.ID, chunks); err != nil {
+		t.Fatalf("PutChunks: %v", err)
+	}
+	return doc
+}
+
+// A long document matches on several chunks. Returning it once per
+// matching chunk is not only untidy — the repeats consume result slots,
+// so genuinely different documents fall off the end of the limit.
+//
+// engineering-mcp's /review-branch command already tells the model that
+// "only the top-scoring passage per document is kept", so this is the
+// documented contract, not a change of behaviour.
+func TestSearchReturnsOneRowPerDocument(t *testing.T) {
+	ctx := context.Background()
+	storage := openTestStore(t)
+	repo, _ := domain.NewRepository("ws-1", "pivot", "/repos/pivot")
+	if err := storage.PutRepository(ctx, repo); err != nil {
+		t.Fatalf("PutRepository: %v", err)
+	}
+
+	putDocWithChunks(t, ctx, storage, repo.ID, "handbook/live-audio.md",
+		"live audio and video overview",
+		"live audio routing details",
+		"live audio device selection",
+		"live audio troubleshooting")
+	putDoc(t, ctx, storage, repo.ID, "plans/streaming-room.md", "live audio rooms plan")
+	putDoc(t, ctx, storage, repo.ID, "plans/captions.md", "live audio captions")
+
+	// A limit smaller than the number of matching chunks: without
+	// collapsing, one document's four chunks fill it and the other two
+	// documents are never returned.
+	results, err := New(storage).Search(ctx, "live audio", kernel.SearchOptions{Limit: 3})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	seen := map[string]int{}
+	for _, r := range results {
+		seen[r.Document.Path]++
+	}
+	for path, n := range seen {
+		if n > 1 {
+			t.Errorf("%s appears %d times, want 1", path, n)
+		}
+	}
+	if len(seen) != 3 {
+		t.Errorf("covered %d distinct documents, want 3 — repeats crowded them out: %v", len(seen), seen)
+	}
+}
+
+// Collapsing must not reorder: a document's rank is decided by its best
+// passage, and matching twice must not move it.
+func TestCollapseKeepsBestScoreAndOrder(t *testing.T) {
+	in := []scoredMatch{
+		{blended: 0.9, match: kernel.ChunkMatch{Document: domain.CanonicalDocument{ID: "a", Path: "a.md"}}},
+		{blended: 0.8, match: kernel.ChunkMatch{Document: domain.CanonicalDocument{ID: "b", Path: "b.md"}}},
+		{blended: 0.7, match: kernel.ChunkMatch{Document: domain.CanonicalDocument{ID: "a", Path: "a.md"}}},
+		{blended: 0.6, match: kernel.ChunkMatch{Document: domain.CanonicalDocument{ID: "c", Path: "c.md"}}},
+	}
+	out := collapseToDocuments(in)
+
+	if len(out) != 3 {
+		t.Fatalf("got %d rows, want 3", len(out))
+	}
+	wantIDs := []string{"a", "b", "c"}
+	wantScores := []float64{0.9, 0.8, 0.6}
+	for i := range out {
+		if out[i].match.Document.ID != wantIDs[i] || out[i].blended != wantScores[i] {
+			t.Errorf("row %d = %s/%.1f, want %s/%.1f",
+				i, out[i].match.Document.ID, out[i].blended, wantIDs[i], wantScores[i])
+		}
 	}
 }
