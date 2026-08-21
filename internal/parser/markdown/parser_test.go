@@ -250,3 +250,58 @@ func TestInferDocTypeIndexPagesAreDocumentation(t *testing.T) {
 		t.Errorf("inferDocType(rules/README.md, doc: rules-index) = %q, want %q", got, domain.DocTypeReadme)
 	}
 }
+
+// A list-valued front-matter field must also be readable as metadata.
+//
+// Without it, `applies_to: ["docs/**"]` left the metadata key unset, and
+// an empty scope is *universal* (RFC-0005) — so a rule scoped to docs
+// silently governed every file in the repository. A rule that
+// over-applies is indistinguishable from one written broadly on purpose,
+// which is why this is a correctness bug and not a cosmetic one.
+func TestListValuedFrontMatterIsAlsoMetadata(t *testing.T) {
+	raw, err := domain.NewRawDocument("repo-1", "rules/scoped.md", []byte(`---
+doc: RULE
+applies_to: ["docs/**", "handbook/**"]
+audience: [human, agent]
+---
+
+# Scoped rule
+`))
+	if err != nil {
+		t.Fatalf("NewRawDocument: %v", err)
+	}
+	doc, err := New().Parse(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	got, ok := doc.Metadata.Get(domain.AppliesToKey)
+	if !ok {
+		t.Fatal("applies_to is absent from metadata, so its scope reads as universal")
+	}
+	if got != "docs/**, handbook/**" {
+		t.Errorf("applies_to metadata = %q, want %q", got, "docs/**, handbook/**")
+	}
+
+	scope := domain.ScopeOf(doc.Metadata)
+	if scope.Universal() {
+		t.Fatal("scope is universal — the rule would govern every file in the repository")
+	}
+	if !scope.Matches([]string{"docs/architecture.md"}) {
+		t.Error("should govern docs/architecture.md")
+	}
+	if scope.Matches([]string{"src/main.go"}) {
+		t.Error("must NOT govern src/main.go — that is the leak this test exists for")
+	}
+
+	// Tags are unchanged: list fields still produce one Tag per item.
+	var audience int
+	for _, tag := range doc.Tags {
+		if tag.Key == "audience" {
+			audience++
+		}
+	}
+	if audience != 2 {
+		t.Errorf("audience tags = %d, want 2 — tag behaviour must be unchanged", audience)
+	}
+}

@@ -137,12 +137,37 @@ func applyFrontMatter(doc *domain.CanonicalDocument, frontMatter []byte) error {
 		key, value := mapping.Content[i], mapping.Content[i+1]
 		switch value.Kind {
 		case yaml.SequenceNode:
+			items := make([]string, 0, len(value.Content))
 			for _, item := range value.Content {
 				tag, err := domain.NewTag(doc.ID, key.Value, item.Value)
 				if err != nil {
 					return err
 				}
 				doc.Tags = append(doc.Tags, tag)
+				items = append(items, item.Value)
+			}
+			// applies_to, alone among list-valued fields, is also recorded
+			// as metadata. Every other list becomes Tags and nothing else,
+			// which is the deliberate design (see
+			// TestParseFrontMatterAndBody) — a list is a set of values,
+			// and stringifying it would invent a shape.
+			//
+			// applies_to is different because an *absent* scope is not
+			// missing data, it is a different value: RFC-0005 reads an
+			// empty scope as universal. So
+			//
+			//     applies_to: ["docs/**"]
+			//
+			// left the metadata key unset and silently governed every file
+			// in the repository rather than docs. Verified end to end —
+			// the rule was returned as governing src/main.go — and it is
+			// invisible, because a rule that over-applies looks exactly
+			// like one written broadly on purpose. The YAML list is the
+			// natural way to write several globs, and these repositories
+			// already use list syntax for `audience:`, so authors reach
+			// for it. engineering:rules/no-silent-fallback.md.
+			if key.Value == domain.AppliesToKey {
+				doc.Metadata.Set(key.Value, strings.Join(items, ", "))
 			}
 		case yaml.ScalarNode:
 			if value.Tag == "!!null" {
